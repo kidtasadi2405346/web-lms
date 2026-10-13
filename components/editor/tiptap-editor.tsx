@@ -48,14 +48,18 @@ import {
   Plus,
   Trash2,
   Omega,
+  Eye,
+  RemoveFormatting,
+  RotateCcw,
 } from 'lucide-react'
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Modal } from '@/components/ui/modal'
 import { createClient } from '@/lib/supabase/client'
 import { RICH_CONTENT_PROSE_CLASSES } from './rich-content'
+import { TipTapViewer } from './tiptap-viewer'
 import { FontSize } from './font-size-extension'
 import { CustomImage } from './custom-image-extension'
 import { processImageForUpload } from '@/lib/image-processor'
@@ -71,17 +75,22 @@ interface TipTapEditorProps {
   value?: string
   onChange?: (html: string) => void
   placeholder?: string
+  materialId?: string
 }
 
 export function TipTapEditor({
   value = '',
   onChange,
   placeholder = 'Tulis isi materi di sini...',
+  materialId = 'new',
 }: TipTapEditorProps) {
   const [showColorPicker, setShowColorPicker] = useState(false)
   const [showHighlightPicker, setShowHighlightPicker] = useState(false)
   const [showTableMenu, setShowTableMenu] = useState(false)
   const [showSymbolPicker, setShowSymbolPicker] = useState(false)
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false)
+  const [hasDraft, setHasDraft] = useState(false)
+  const [isDirty, setIsDirty] = useState(false)
 
   const colorPickerRef = useRef<HTMLDivElement>(null)
   const highlightPickerRef = useRef<HTMLDivElement>(null)
@@ -99,6 +108,30 @@ export function TipTapEditor({
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const draftStorageKey = useMemo(() => `lms_material_draft_${materialId}`, [materialId])
+
+  // Cek apakah ada draf tersimpan di localStorage saat mount
+  useEffect(() => {
+    try {
+      const savedDraft = localStorage.getItem(draftStorageKey)
+      if (savedDraft && savedDraft !== value && savedDraft.trim() !== '<p></p>') {
+        setHasDraft(true)
+      }
+    } catch {}
+  }, [draftStorageKey, value])
+
+  // Peringatan sebelum menutup browser/tab bila ada perubahan yang belum disimpan
+  useEffect(() => {
+    function handleBeforeUnload(e: BeforeUnloadEvent) {
+      if (isDirty) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [isDirty])
 
   // Menutup popup saat klik di luar
   useEffect(() => {
@@ -225,9 +258,25 @@ export function TipTapEditor({
       },
     },
     onUpdate: ({ editor }) => {
-      onChange?.(editor.getHTML())
+      const html = editor.getHTML()
+      setIsDirty(true)
+      onChange?.(html)
+
+      // Simpan draf otomatis ke localStorage
+      try {
+        localStorage.setItem(draftStorageKey, html)
+      } catch {}
     },
   })
+
+  // Hitung jumlah kata dan karakter
+  const { wordCount, charCount } = useMemo(() => {
+    if (!editor) return { wordCount: 0, charCount: 0 }
+    const text = editor.state.doc.textContent || ''
+    const chars = text.length
+    const words = text.trim() ? text.trim().split(/\s+/).length : 0
+    return { wordCount: words, charCount: chars }
+  }, [editor?.state.doc])
 
   if (!editor) {
     return <div className="h-64 rounded-md border bg-muted/20 animate-pulse" />
@@ -244,6 +293,32 @@ export function TipTapEditor({
       return
     }
     editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run()
+  }
+
+  // Pulihkan draf tersimpan
+  function handleRestoreDraft() {
+    try {
+      const savedDraft = localStorage.getItem(draftStorageKey)
+      if (savedDraft) {
+        editor?.commands.setContent(savedDraft)
+        onChange?.(savedDraft)
+        setHasDraft(false)
+      }
+    } catch {}
+  }
+
+  // Buang draf
+  function handleDiscardDraft() {
+    try {
+      localStorage.removeItem(draftStorageKey)
+      setHasDraft(false)
+    } catch {}
+  }
+
+  // Hapus semua format formatting pada teks terpilih
+  function handleClearFormatting() {
+    if (!editor) return
+    editor.chain().focus().unsetAllMarks().clearNodes().run()
   }
 
   async function handleConfirmUploadImage() {
@@ -326,6 +401,36 @@ export function TipTapEditor({
 
   return (
     <div className="flex flex-col rounded-lg border bg-background shadow-sm focus-within:ring-1 focus-within:ring-ring">
+      {/* Banner Notifikasi Pulihkan Draf Lokal */}
+      {hasDraft && (
+        <div className="flex items-center justify-between gap-2 border-b bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+          <div className="flex items-center gap-1.5">
+            <RotateCcw className="h-3.5 w-3.5" />
+            <span>Ditemukan draf otomatis tersimpan sebelumnya di peramban ini.</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Button
+              type="button"
+              size="sm"
+              variant="default"
+              className="h-6 text-[11px] px-2 bg-amber-600 hover:bg-amber-700 text-white"
+              onClick={handleRestoreDraft}
+            >
+              Pulihkan Draf
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
+              onClick={handleDiscardDraft}
+            >
+              Abaikan
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Input File Tersembunyi untuk Sisipkan Gambar */}
       <input
         ref={fileInputRef}
@@ -903,6 +1008,33 @@ export function TipTapEditor({
           <Link2 className="h-4 w-4" />
         </Button>
 
+        {/* Hapus Format */}
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+          onClick={handleClearFormatting}
+          title="Hapus Format Teks Terpilih"
+          aria-label="Hapus Format"
+        >
+          <RemoveFormatting className="h-4 w-4" />
+        </Button>
+
+        {/* Pratinjau Tampilan Siswa */}
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-8 px-2 gap-1 text-xs ml-1"
+          onClick={() => setIsPreviewOpen(true)}
+          title="Pratinjau Tampilan Siswa"
+          aria-label="Pratinjau Tampilan Siswa"
+        >
+          <Eye className="h-3.5 w-3.5 text-primary" />
+          <span className="hidden sm:inline">Pratinjau</span>
+        </Button>
+
         {/* Undo / Redo */}
         <div className="ml-auto flex items-center gap-1 shrink-0">
           <Button
@@ -936,6 +1068,45 @@ export function TipTapEditor({
       <div className="overflow-x-auto w-full">
         <EditorContent editor={editor} />
       </div>
+
+      {/* Footer Info: Jumlah Kata & Karakter */}
+      <div className="flex items-center justify-between border-t bg-muted/20 px-3 py-1.5 text-[11px] text-muted-foreground">
+        <div className="flex items-center gap-3">
+          <span>
+            <strong>{wordCount}</strong> kata
+          </span>
+          <span>
+            <strong>{charCount}</strong> karakter
+          </span>
+        </div>
+        <div className="text-[10px]">
+          {isDirty ? (
+            <span className="text-amber-600 dark:text-amber-400">● Perubahan belum disimpan</span>
+          ) : (
+            <span className="text-emerald-600 dark:text-emerald-400">✓ Tersimpan</span>
+          )}
+        </div>
+      </div>
+
+      {/* Modal Dialog Pratinjau Tampilan Siswa */}
+      <Modal
+        isOpen={isPreviewOpen}
+        onClose={() => setIsPreviewOpen(false)}
+        title="Pratinjau Tampilan Siswa"
+        description="Begini tampilan konten materi yang akan dilihat oleh siswa di halaman pembelajaran."
+        maxWidth="2xl"
+      >
+        <div className="space-y-4">
+          <div className="rounded-lg border bg-card p-4 max-h-[65vh] overflow-y-auto">
+            <TipTapViewer content={editor.getHTML()} />
+          </div>
+          <div className="flex justify-end pt-2 border-t">
+            <Button type="button" variant="outline" size="sm" onClick={() => setIsPreviewOpen(false)}>
+              Tutup Pratinjau
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Modal Dialog Konfigurasi Gambar */}
       <Modal

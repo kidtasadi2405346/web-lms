@@ -1031,6 +1031,7 @@ export function ModulesManager({
               value={matContent}
               onChange={(html) => setMatContent(html)}
               placeholder="Tulis uraian materi di sini..."
+              materialId={editMaterialTarget?.id || `new_${materialModuleTarget?.id || 'default'}`}
             />
           </div>
 

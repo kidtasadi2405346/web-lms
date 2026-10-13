@@ -3,7 +3,7 @@ import {
   ALLOWED_FONT_SIZES,
   PRESET_COLORS,
   PRESET_HIGHLIGHTS,
-} from '@/components/editor/editor-constants'
+} from '../components/editor/editor-constants'
 
 const ALLOWED_FONT_FAMILY_VALUES = ['serif', 'monospace', 'inherit']
 const ALLOWED_FONT_SIZE_VALUES = ALLOWED_FONT_SIZES.map((f) => f.value)
@@ -68,31 +68,46 @@ function registerSanitizeHooks() {
   })
 
   DOMPurify.addHook('uponSanitizeAttribute', (node, data) => {
-    // Validasi link: hanya http dan https, cegah javascript:
+    // Validasi link: hanya http dan https, cegah javascript:, pasang target _blank dan rel noopener noreferrer
     if (data.attrName === 'href') {
-      const href = (data.attrValue || '').trim().toLowerCase()
-      if (href.startsWith('javascript:') || href.startsWith('data:')) {
+      const href = (data.attrValue || '').trim()
+      const lowerHref = href.toLowerCase()
+      if (
+        lowerHref.startsWith('javascript:') ||
+        lowerHref.startsWith('data:') ||
+        lowerHref.startsWith('vbscript:') ||
+        (!lowerHref.startsWith('http://') &&
+          !lowerHref.startsWith('https://') &&
+          !lowerHref.startsWith('/') &&
+          !lowerHref.startsWith('#'))
+      ) {
         data.attrValue = ''
+      } else {
+        if (lowerHref.startsWith('http://') || lowerHref.startsWith('https://')) {
+          const anchorNode = node as HTMLAnchorElement
+          anchorNode.setAttribute('target', '_blank')
+          anchorNode.setAttribute('rel', 'noopener noreferrer')
+        }
       }
     }
 
     if (data.attrName === 'style') {
       const styleStr = data.attrValue || ''
-      // Tolak berbahaya: url(), expression(), position, javascript, etc.
-      if (
-        /url\(|expression\(|position|z-index|behavior|-moz-binding|javascript:/i.test(
-          styleStr
-        )
-      ) {
-        data.attrValue = ''
-        return
-      }
 
-      // Filter hanya properti yang diizinkan dengan nilai yang sesuai whitelist
+      // Filter deklarasi per deklarasi
       const declarations = styleStr.split(';').map((s) => s.trim()).filter(Boolean)
       const safeDeclarations: string[] = []
 
       for (const decl of declarations) {
+        // Abaikan jika deklarasi mengandung url(), expression(), position, javascript, etc.
+        if (
+          /url\(|expression\(|position|z-index|behavior|-moz-binding|javascript:/i.test(
+            decl
+          )
+        ) {
+          continue
+        }
+
         const colonIndex = decl.indexOf(':')
         if (colonIndex === -1) continue
         const prop = decl.slice(0, colonIndex).trim().toLowerCase()
