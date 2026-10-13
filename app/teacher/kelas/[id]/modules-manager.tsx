@@ -1,0 +1,1372 @@
+'use client'
+
+import { useState } from 'react'
+import Link from 'next/link'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Modal } from '@/components/ui/modal'
+import { Badge } from '@/components/ui/badge'
+import { TipTapEditor } from '@/components/editor/tiptap-editor'
+import { TipTapViewer } from '@/components/editor/tiptap-viewer'
+import { VideoEmbed } from '@/components/media/video-embed'
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Cpu,
+  Edit2,
+  Eye,
+  FileQuestion,
+  FileText,
+  FolderPlus,
+  GraduationCap,
+  HelpCircle,
+  KeyRound,
+  Plus,
+  Shuffle,
+  Trash2,
+  Video,
+} from 'lucide-react'
+import { SimulationManagerModal } from '@/components/teacher/simulation-manager-modal'
+import type { SimulationItem } from '@/lib/types'
+import {
+  createModuleAction,
+  updateModuleAction,
+  deleteModuleAction,
+  createMaterialAction,
+  updateMaterialAction,
+  deleteMaterialAction,
+} from '@/lib/actions/teacher'
+import {
+  createQuizAction,
+  updateQuizAction,
+  deleteQuizAction,
+  createQuestionAction,
+  updateQuestionAction,
+  deleteQuestionAction,
+} from '@/lib/actions/quiz'
+
+type SubjectInfo = { id: string; name: string }
+
+type QuestionOption = { key: string; text: string }
+
+type QuestionData = {
+  id: string
+  quiz_id: string
+  question_text: string
+  options: QuestionOption[]
+  order_index: number
+  created_at?: string
+  correct_option?: string
+}
+
+type QuizData = {
+  id: string
+  module_id: string
+  title: string
+  description?: string | null
+  passing_score: number
+  order_index: number
+  created_at?: string
+  shuffle_questions?: boolean
+  shuffle_options?: boolean
+  questions?: QuestionData[]
+}
+
+type MaterialData = {
+  id: string
+  module_id: string
+  title: string
+  content?: string | null
+  video_url?: string | null
+  order_index: number
+  created_at?: string
+  simulations?: SimulationItem[]
+}
+
+type ModuleData = {
+  id: string
+  class_id: string
+  subject_id: string
+  title: string
+  description?: string | null
+  order_index: number
+  created_at?: string
+  subjects?: SubjectInfo | null
+  materials?: MaterialData[]
+  quizzes?: QuizData[]
+}
+
+interface ModulesManagerProps {
+  classId: string
+  className: string
+  referralCode: string
+  taughtSubjects: SubjectInfo[]
+  initialModules: ModuleData[]
+  initialSelectedSubject?: string
+}
+
+export function ModulesManager({
+  classId,
+  className,
+  referralCode,
+  taughtSubjects,
+  initialModules,
+  initialSelectedSubject,
+}: ModulesManagerProps) {
+  const [modules] = useState<ModuleData[]>(initialModules)
+  const [selectedSubjectId, setSelectedSubjectId] = useState<string>(
+    initialSelectedSubject || taughtSubjects[0]?.id || 'all',
+  )
+
+  // Module modal states
+  const [isModuleModalOpen, setIsModuleModalOpen] = useState(false)
+  const [editModuleTarget, setEditModuleTarget] = useState<ModuleData | null>(null)
+  const [deleteModuleTarget, setDeleteModuleTarget] = useState<ModuleData | null>(null)
+  const [moduleTitle, setModuleTitle] = useState('')
+  const [moduleDesc, setModuleDesc] = useState('')
+  const [moduleSubjectId, setModuleSubjectId] = useState(taughtSubjects[0]?.id || '')
+
+  // Material modal states
+  const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false)
+  const [materialModuleTarget, setMaterialModuleTarget] = useState<ModuleData | null>(null)
+  const [editMaterialTarget, setEditMaterialTarget] = useState<MaterialData | null>(null)
+  const [deleteMaterialTarget, setDeleteMaterialTarget] = useState<MaterialData | null>(null)
+  const [viewMaterialTarget, setViewMaterialTarget] = useState<MaterialData | null>(null)
+  const [simulationMaterialTarget, setSimulationMaterialTarget] = useState<MaterialData | null>(null)
+  const [matTitle, setMatTitle] = useState('')
+  const [matVideoUrl, setMatVideoUrl] = useState('')
+  const [matContent, setMatContent] = useState('')
+
+  // Quiz modal states
+  const [isQuizModalOpen, setIsQuizModalOpen] = useState(false)
+  const [quizModuleTarget, setQuizModuleTarget] = useState<ModuleData | null>(null)
+  const [editQuizTarget, setEditQuizTarget] = useState<QuizData | null>(null)
+  const [deleteQuizTarget, setDeleteQuizTarget] = useState<QuizData | null>(null)
+  const [quizTitle, setQuizTitle] = useState('')
+  const [quizDesc, setQuizDesc] = useState('')
+  const [passingScore, setPassingScore] = useState('70')
+  const [shuffleQuestions, setShuffleQuestions] = useState(false)
+  const [shuffleOptions, setShuffleOptions] = useState(false)
+
+  // Question modal states
+  const [isQuestionModalOpen, setIsQuestionModalOpen] = useState(false)
+  const [questionQuizTarget, setQuestionQuizTarget] = useState<QuizData | null>(null)
+  const [editQuestionTarget, setEditQuestionTarget] = useState<QuestionData | null>(null)
+  const [deleteQuestionTarget, setDeleteQuestionTarget] = useState<QuestionData | null>(null)
+  const [viewQuestionsQuizTarget, setViewQuestionsQuizTarget] = useState<QuizData | null>(null)
+
+  const [qText, setQText] = useState('')
+  const [optA, setOptA] = useState('')
+  const [optB, setOptB] = useState('')
+  const [optC, setOptC] = useState('')
+  const [optD, setOptD] = useState('')
+  const [correctOpt, setCorrectOpt] = useState('A')
+
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Filter modules
+  const filteredModules =
+    selectedSubjectId === 'all'
+      ? modules
+      : modules.filter((m) => m.subject_id === selectedSubjectId)
+
+  // ====================================================================
+  // MODUL HANDLERS
+  // ====================================================================
+  function openAddModule() {
+    setEditModuleTarget(null)
+    setModuleTitle('')
+    setModuleDesc('')
+    setModuleSubjectId(selectedSubjectId !== 'all' ? selectedSubjectId : taughtSubjects[0]?.id || '')
+    setError(null)
+    setIsModuleModalOpen(true)
+  }
+
+  function openEditModule(m: ModuleData) {
+    setEditModuleTarget(m)
+    setModuleTitle(m.title)
+    setModuleDesc(m.description || '')
+    setModuleSubjectId(m.subject_id)
+    setError(null)
+    setIsModuleModalOpen(true)
+  }
+
+  async function handleSaveModule(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setLoading(true)
+    setError(null)
+
+    const formData = new FormData()
+    formData.append('class_id', classId)
+    formData.append('subject_id', moduleSubjectId)
+    formData.append('title', moduleTitle)
+    formData.append('description', moduleDesc)
+
+    const res = editModuleTarget
+      ? await updateModuleAction(editModuleTarget.id, classId, formData)
+      : await createModuleAction(formData)
+
+    setLoading(false)
+    if (res.error) {
+      setError(res.error)
+      return
+    }
+
+    setIsModuleModalOpen(false)
+    window.location.reload()
+  }
+
+  async function handleDeleteModule() {
+    if (!deleteModuleTarget) return
+    setLoading(true)
+    setError(null)
+
+    const res = await deleteModuleAction(deleteModuleTarget.id, classId)
+    setLoading(false)
+    if (res.error) {
+      setError(res.error)
+      return
+    }
+
+    setDeleteModuleTarget(null)
+    window.location.reload()
+  }
+
+  // ====================================================================
+  // MATERI HANDLERS
+  // ====================================================================
+  function openAddMaterial(m: ModuleData) {
+    setMaterialModuleTarget(m)
+    setEditMaterialTarget(null)
+    setMatTitle('')
+    setMatVideoUrl('')
+    setMatContent('')
+    setError(null)
+    setIsMaterialModalOpen(true)
+  }
+
+  function openEditMaterial(m: ModuleData, mat: MaterialData) {
+    setMaterialModuleTarget(m)
+    setEditMaterialTarget(mat)
+    setMatTitle(mat.title)
+    setMatVideoUrl(mat.video_url || '')
+    setMatContent(mat.content || '')
+    setError(null)
+    setIsMaterialModalOpen(true)
+  }
+
+  async function handleSaveMaterial(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    if (!materialModuleTarget) return
+
+    setLoading(true)
+    setError(null)
+
+    const formData = new FormData()
+    formData.append('class_id', classId)
+    formData.append('module_id', materialModuleTarget.id)
+    formData.append('title', matTitle)
+    formData.append('video_url', matVideoUrl)
+    formData.append('content', matContent)
+
+    const res = editMaterialTarget
+      ? await updateMaterialAction(editMaterialTarget.id, classId, formData)
+      : await createMaterialAction(formData)
+
+    setLoading(false)
+    if (res.error) {
+      setError(res.error)
+      return
+    }
+
+    setIsMaterialModalOpen(false)
+    window.location.reload()
+  }
+
+  async function handleDeleteMaterial() {
+    if (!deleteMaterialTarget) return
+    setLoading(true)
+    setError(null)
+
+    const res = await deleteMaterialAction(deleteMaterialTarget.id, classId)
+    setLoading(false)
+    if (res.error) {
+      setError(res.error)
+      return
+    }
+
+    setDeleteMaterialTarget(null)
+    window.location.reload()
+  }
+
+  // ====================================================================
+  // KUIS HANDLERS
+  // ====================================================================
+  function openAddQuiz(m: ModuleData) {
+    setQuizModuleTarget(m)
+    setEditQuizTarget(null)
+    setQuizTitle('')
+    setQuizDesc('')
+    setPassingScore('70')
+    setShuffleQuestions(false)
+    setShuffleOptions(false)
+    setError(null)
+    setIsQuizModalOpen(true)
+  }
+
+  function openEditQuiz(m: ModuleData, qz: QuizData) {
+    setQuizModuleTarget(m)
+    setEditQuizTarget(qz)
+    setQuizTitle(qz.title)
+    setQuizDesc(qz.description || '')
+    setPassingScore(String(qz.passing_score))
+    setShuffleQuestions(qz.shuffle_questions ?? false)
+    setShuffleOptions(qz.shuffle_options ?? false)
+    setError(null)
+    setIsQuizModalOpen(true)
+  }
+
+  async function handleSaveQuiz(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    if (!quizModuleTarget) return
+
+    setLoading(true)
+    setError(null)
+
+    const formData = new FormData()
+    formData.append('class_id', classId)
+    formData.append('module_id', quizModuleTarget.id)
+    formData.append('title', quizTitle)
+    formData.append('description', quizDesc)
+    formData.append('passing_score', passingScore)
+    formData.append('shuffle_questions', String(shuffleQuestions))
+    formData.append('shuffle_options', String(shuffleOptions))
+
+    const res = editQuizTarget
+      ? await updateQuizAction(editQuizTarget.id, classId, formData)
+      : await createQuizAction(formData)
+
+    setLoading(false)
+    if (res.error) {
+      setError(res.error)
+      return
+    }
+
+    setIsQuizModalOpen(false)
+    window.location.reload()
+  }
+
+  async function handleDeleteQuiz() {
+    if (!deleteQuizTarget) return
+    setLoading(true)
+    setError(null)
+
+    const res = await deleteQuizAction(deleteQuizTarget.id, classId)
+    setLoading(false)
+    if (res.error) {
+      setError(res.error)
+      return
+    }
+
+    setDeleteQuizTarget(null)
+    window.location.reload()
+  }
+
+  // ====================================================================
+  // QUESTION HANDLERS
+  // ====================================================================
+  function openAddQuestion(qz: QuizData) {
+    setQuestionQuizTarget(qz)
+    setEditQuestionTarget(null)
+    setQText('')
+    setOptA('')
+    setOptB('')
+    setOptC('')
+    setOptD('')
+    setCorrectOpt('A')
+    setError(null)
+    setIsQuestionModalOpen(true)
+  }
+
+  function openEditQuestion(qz: QuizData, q: QuestionData) {
+    setQuestionQuizTarget(qz)
+    setEditQuestionTarget(q)
+    setQText(q.question_text)
+
+    const a = q.options.find((o) => o.key === 'A')?.text || ''
+    const b = q.options.find((o) => o.key === 'B')?.text || ''
+    const c = q.options.find((o) => o.key === 'C')?.text || ''
+    const d = q.options.find((o) => o.key === 'D')?.text || ''
+
+    setOptA(a)
+    setOptB(b)
+    setOptC(c)
+    setOptD(d)
+    setCorrectOpt(q.correct_option || 'A')
+    setError(null)
+    setIsQuestionModalOpen(true)
+  }
+
+  async function handleSaveQuestion(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    if (!questionQuizTarget) return
+
+    setLoading(true)
+    setError(null)
+
+    const formData = new FormData()
+    formData.append('class_id', classId)
+    formData.append('quiz_id', questionQuizTarget.id)
+    formData.append('question_text', qText)
+    formData.append('option_a', optA)
+    formData.append('option_b', optB)
+    formData.append('option_c', optC)
+    formData.append('option_d', optD)
+    formData.append('correct_option', correctOpt)
+
+    const res = editQuestionTarget
+      ? await updateQuestionAction(editQuestionTarget.id, classId, formData)
+      : await createQuestionAction(formData)
+
+    setLoading(false)
+    if (res.error) {
+      setError(res.error)
+      return
+    }
+
+    setIsQuestionModalOpen(false)
+    window.location.reload()
+  }
+
+  async function handleDeleteQuestion() {
+    if (!deleteQuestionTarget) return
+    setLoading(true)
+    setError(null)
+
+    const res = await deleteQuestionAction(deleteQuestionTarget.id, classId)
+    setLoading(false)
+    if (res.error) {
+      setError(res.error)
+      return
+    }
+
+    setDeleteQuestionTarget(null)
+    window.location.reload()
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <Link
+          href="/teacher"
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground mb-3"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" /> Kembali ke Kelas Saya
+        </Link>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold tracking-tight">Kelas {className}</h1>
+              <Badge variant="outline" className="font-mono text-xs">
+                Kode: {referralCode}
+              </Badge>
+            </div>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Kelola modul, materi pembelajaran, dan kuis pilihan ganda untuk kelas ini.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+            <Button asChild variant="outline" className="gap-2 border-blue-500/30 text-blue-600 dark:text-blue-400 hover:bg-blue-500/10">
+              <Link href={`/teacher/kelas/${classId}/tugas`}>
+                <FileText className="h-4 w-4" /> Kelola Tugas
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className="gap-2 border-primary/30 text-primary hover:bg-primary/10">
+              <Link href={`/teacher/kelas/${classId}/nilai`}>
+                <GraduationCap className="h-4 w-4" /> Rekap Nilai Siswa
+              </Link>
+            </Button>
+            <Button onClick={openAddModule} className="gap-2">
+              <Plus className="h-4 w-4" /> Tambah Modul
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Filter Mapel */}
+      {taughtSubjects.length > 1 && (
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+          <span className="text-xs font-medium text-muted-foreground">Filter Mapel:</span>
+          <Button
+            size="sm"
+            variant={selectedSubjectId === 'all' ? 'default' : 'outline'}
+            className="h-8 text-xs"
+            onClick={() => setSelectedSubjectId('all')}
+          >
+            Semua ({modules.length})
+          </Button>
+          {taughtSubjects.map((s) => {
+            const count = modules.filter((m) => m.subject_id === s.id).length
+            return (
+              <Button
+                key={s.id}
+                size="sm"
+                variant={selectedSubjectId === s.id ? 'default' : 'outline'}
+                className="h-8 text-xs"
+                onClick={() => setSelectedSubjectId(s.id)}
+              >
+                {s.name} ({count})
+              </Button>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Daftar Modul */}
+      {filteredModules.length === 0 ? (
+        <Card className="border-dashed text-center">
+          <CardHeader>
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+              <FolderPlus className="h-6 w-6 text-muted-foreground" />
+            </div>
+            <CardTitle className="mt-2">Belum ada modul pembelajaran</CardTitle>
+            <CardDescription>
+              Buat modul bab pertama untuk mulai mengisi materi teks, video, dan kuis pilihan ganda.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={openAddModule} variant="outline" className="gap-2">
+              <Plus className="h-4 w-4" /> Buat Modul Baru
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-6">
+          {filteredModules.map((m, idx) => (
+            <Card key={m.id} className="overflow-hidden border shadow-sm">
+              <CardHeader className="bg-muted/20 pb-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary" className="text-xs">
+                        Modul {idx + 1}
+                      </Badge>
+                      <Badge variant="outline" className="text-xs">
+                        {m.subjects?.name ?? 'Mata Pelajaran'}
+                      </Badge>
+                    </div>
+                    <CardTitle className="text-lg font-semibold">{m.title}</CardTitle>
+                    {m.description && (
+                      <CardDescription className="text-sm">{m.description}</CardDescription>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 gap-1 text-xs"
+                      onClick={() => openAddMaterial(m)}
+                    >
+                      <Plus className="h-3.5 w-3.5" /> Tambah Materi
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 gap-1 text-xs border-primary/40 text-primary hover:bg-primary/10"
+                      onClick={() => openAddQuiz(m)}
+                    >
+                      <FileQuestion className="h-3.5 w-3.5" /> Buat Kuis
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                      onClick={() => openEditModule(m)}
+                      title="Ubah Modul"
+                    >
+                      <Edit2 className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10"
+                      onClick={() => setDeleteModuleTarget(m)}
+                      title="Hapus Modul"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+
+              <CardContent className="p-4 sm:p-5 space-y-5">
+                {/* Bagian Materi */}
+                <div>
+                  <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2.5">
+                    Materi Pembelajaran ({m.materials?.length || 0})
+                  </h4>
+
+                  {!m.materials || m.materials.length === 0 ? (
+                    <div className="rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground">
+                      Belum ada materi teks/video di bab ini.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {m.materials.map((mat, matIdx) => (
+                        <div
+                          key={mat.id}
+                          className="flex flex-col gap-2 rounded-lg border bg-card p-3 transition-colors hover:bg-accent/40 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-xs font-semibold text-primary">
+                              {matIdx + 1}
+                            </div>
+                            <div>
+                              <p className="font-medium text-foreground text-sm">{mat.title}</p>
+                              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                                {mat.simulations && mat.simulations.length > 0 && (
+                                  <span className="flex items-center gap-1 text-primary font-medium">
+                                    <Cpu className="h-3 w-3" /> Simulasi ({mat.simulations.length})
+                                  </span>
+                                )}
+                                {mat.video_url && (
+                                  <span className="flex items-center gap-1 text-primary">
+                                    <Video className="h-3 w-3" /> Video Embed
+                                  </span>
+                                )}
+                                {mat.content && (
+                                  <span className="flex items-center gap-1">
+                                    <FileText className="h-3 w-3" /> Teks
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1 self-end sm:self-auto">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs gap-1 border-primary/30 text-primary hover:bg-primary/10"
+                              onClick={() => setSimulationMaterialTarget(mat)}
+                            >
+                              <Cpu className="h-3 w-3" /> Simulasi ({mat.simulations?.length || 0})
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              className="h-7 text-xs gap-1"
+                              onClick={() => setViewMaterialTarget(mat)}
+                            >
+                              <Eye className="h-3 w-3" /> Lihat
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 text-xs gap-1"
+                              onClick={() => openEditMaterial(m, mat)}
+                            >
+                              <Edit2 className="h-3 w-3" /> Ubah
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10"
+                              onClick={() => setDeleteMaterialTarget(mat)}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Bagian Kuis Pilihan Ganda */}
+                <div className="border-t pt-4">
+                  <div className="flex items-center justify-between mb-2.5">
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                      <FileQuestion className="h-3.5 w-3.5 text-primary" />
+                      Kuis Evaluasi Bab ({m.quizzes?.length || 0})
+                    </h4>
+                  </div>
+
+                  {!m.quizzes || m.quizzes.length === 0 ? (
+                    <div className="rounded-lg border border-dashed bg-muted/20 p-4 text-center text-xs text-muted-foreground">
+                      Belum ada kuis pilihan ganda di bab ini. Klik tombol <strong>&quot;Buat Kuis&quot;</strong> di atas untuk membuat evaluasi.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {m.quizzes.map((qz) => (
+                        <div
+                          key={qz.id}
+                          className="rounded-lg border border-primary/20 bg-primary/5 p-3.5 transition-all hover:bg-primary/10"
+                        >
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-sm text-foreground">{qz.title}</span>
+                                <Badge variant="secondary" className="text-xs font-mono">
+                                  KKM: {qz.passing_score}%
+                                </Badge>
+                                <Badge variant="outline" className="text-xs">
+                                  {qz.questions?.length || 0} Soal
+                                </Badge>
+                                {qz.shuffle_questions && (
+                                  <Badge variant="outline" className="text-[10px] gap-1 text-emerald-600 dark:text-emerald-400 border-emerald-500/30">
+                                    <Shuffle className="h-2.5 w-2.5" /> Acak Soal
+                                  </Badge>
+                                )}
+                                {qz.shuffle_options && (
+                                  <Badge variant="outline" className="text-[10px] gap-1 text-sky-600 dark:text-sky-400 border-sky-500/30">
+                                    <Shuffle className="h-2.5 w-2.5" /> Acak Opsi A-D
+                                  </Badge>
+                                )}
+                              </div>
+                              {qz.description && (
+                                <p className="text-xs text-muted-foreground mt-1">{qz.description}</p>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="secondary"
+                                className="h-7 text-xs gap-1"
+                                onClick={() => openAddQuestion(qz)}
+                              >
+                                <Plus className="h-3 w-3" /> Tambah Soal
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs gap-1"
+                                onClick={() => setViewQuestionsQuizTarget(qz)}
+                              >
+                                <HelpCircle className="h-3 w-3" /> Kelola Soal
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                                onClick={() => openEditQuiz(m, qz)}
+                                title="Ubah Kuis"
+                              >
+                                <Edit2 className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10"
+                                onClick={() => setDeleteQuizTarget(qz)}
+                                title="Hapus Kuis"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* MODAL: Tambah / Edit Modul */}
+      {/* ==================================================================== */}
+      <Modal
+        isOpen={isModuleModalOpen}
+        onClose={() => setIsModuleModalOpen(false)}
+        title={editModuleTarget ? 'Ubah Modul' : 'Tambah Modul Baru'}
+        description="Buat bab atau topik pembelajaran untuk kelas ini."
+      >
+        <form onSubmit={handleSaveModule} className="space-y-4">
+          {error && <div className="rounded-md bg-destructive/10 p-3 text-xs text-destructive">{error}</div>}
+
+          <div className="space-y-2">
+            <Label htmlFor="m-subject">Mata Pelajaran</Label>
+            <select
+              id="m-subject"
+              value={moduleSubjectId}
+              onChange={(e) => setModuleSubjectId(e.target.value)}
+              disabled={!!editModuleTarget}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60"
+              required
+            >
+              {taughtSubjects.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="m-title">Judul Modul</Label>
+            <Input
+              id="m-title"
+              placeholder="Contoh: Bab 1: Persamaan Linear dan Kuadrat"
+              value={moduleTitle}
+              onChange={(e) => setModuleTitle(e.target.value)}
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="m-desc">Deskripsi Singkat (Opsional)</Label>
+            <Textarea
+              id="m-desc"
+              placeholder="Ringkasan kompetensi dasar atau materi yang dipelajari..."
+              value={moduleDesc}
+              onChange={(e) => setModuleDesc(e.target.value)}
+              rows={3}
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={() => setIsModuleModalOpen(false)}>
+              Batal
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? 'Menyimpan...' : editModuleTarget ? 'Simpan Perubahan' : 'Buat Modul'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* ==================================================================== */}
+      {/* MODAL: Hapus Modul */}
+      {/* ==================================================================== */}
+      <Modal
+        isOpen={!!deleteModuleTarget}
+        onClose={() => setDeleteModuleTarget(null)}
+        title="Hapus Modul"
+        description="Apakah Anda yakin ingin menghapus modul ini?"
+      >
+        <div className="space-y-4">
+          {error && <div className="rounded-md bg-destructive/10 p-3 text-xs text-destructive">{error}</div>}
+          <p className="text-sm">
+            Modul <strong>{deleteModuleTarget?.title}</strong> beserta seluruh materi dan kuis di dalamnya akan dihapus
+            secara permanen.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setDeleteModuleTarget(null)}>
+              Batal
+            </Button>
+            <Button type="button" variant="destructive" onClick={handleDeleteModule} disabled={loading}>
+              {loading ? 'Menghapus...' : 'Ya, Hapus'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ==================================================================== */}
+      {/* MODAL: Tambah / Edit Materi */}
+      {/* ==================================================================== */}
+      <Modal
+        isOpen={isMaterialModalOpen}
+        onClose={() => setIsMaterialModalOpen(false)}
+        title={editMaterialTarget ? 'Ubah Materi Pembelajaran' : 'Tambah Materi Baru'}
+        description={`Modul: ${materialModuleTarget?.title || ''}`}
+        maxWidth="2xl"
+      >
+        <form onSubmit={handleSaveMaterial} className="space-y-5">
+          {error && <div className="rounded-md bg-destructive/10 p-3 text-xs text-destructive">{error}</div>}
+
+          <div className="space-y-2">
+            <Label htmlFor="mat-title">Judul Materi</Label>
+            <Input
+              id="mat-title"
+              placeholder="Contoh: Pengenalan Konsep & Rumus Dasar"
+              value={matTitle}
+              onChange={(e) => setMatTitle(e.target.value)}
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="mat-video">URL Video Pembelajaran (YouTube / Google Drive)</Label>
+            <Input
+              id="mat-video"
+              placeholder="Contoh: https://www.youtube.com/watch?v=... atau https://drive.google.com/file/d/.../view"
+              value={matVideoUrl}
+              onChange={(e) => setMatVideoUrl(e.target.value)}
+            />
+            {matVideoUrl && (
+              <div className="mt-3">
+                <p className="mb-1 text-xs font-medium text-muted-foreground">Pratinjau Video:</p>
+                <VideoEmbed url={matVideoUrl} title="Pratinjau Video" />
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label>Isi Materi Pembelajaran (Rich Text)</Label>
+            <TipTapEditor
+              value={matContent}
+              onChange={(html) => setMatContent(html)}
+              placeholder="Tulis uraian materi di sini..."
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={() => setIsMaterialModalOpen(false)}>
+              Batal
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? 'Menyimpan...' : editMaterialTarget ? 'Simpan Perubahan' : 'Terbitkan Materi'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* ==================================================================== */}
+      {/* MODAL: Hapus Materi */}
+      {/* ==================================================================== */}
+      <Modal
+        isOpen={!!deleteMaterialTarget}
+        onClose={() => setDeleteMaterialTarget(null)}
+        title="Hapus Materi"
+        description="Apakah Anda yakin ingin menghapus materi ini?"
+      >
+        <div className="space-y-4">
+          {error && <div className="rounded-md bg-destructive/10 p-3 text-xs text-destructive">{error}</div>}
+          <p className="text-sm">
+            Materi <strong>{deleteMaterialTarget?.title}</strong> akan dihapus secara permanen.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setDeleteMaterialTarget(null)}>
+              Batal
+            </Button>
+            <Button type="button" variant="destructive" onClick={handleDeleteMaterial} disabled={loading}>
+              {loading ? 'Menghapus...' : 'Ya, Hapus'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ==================================================================== */}
+      {/* MODAL: Tambah / Edit Kuis */}
+      {/* ==================================================================== */}
+      <Modal
+        isOpen={isQuizModalOpen}
+        onClose={() => setIsQuizModalOpen(false)}
+        title={editQuizTarget ? 'Ubah Kuis' : 'Buat Kuis Pilihan Ganda'}
+        description={`Modul: ${quizModuleTarget?.title || ''}`}
+      >
+        <form onSubmit={handleSaveQuiz} className="space-y-4">
+          {error && <div className="rounded-md bg-destructive/10 p-3 text-xs text-destructive">{error}</div>}
+
+          <div className="space-y-2">
+            <Label htmlFor="quiz-title">Judul Kuis</Label>
+            <Input
+              id="quiz-title"
+              placeholder="Contoh: Kuis Uji Kompetensi Bab 1"
+              value={quizTitle}
+              onChange={(e) => setQuizTitle(e.target.value)}
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="quiz-passing">Nilai Kelulusan Minimum / KKM (%)</Label>
+            <Input
+              id="quiz-passing"
+              type="number"
+              min={0}
+              max={100}
+              placeholder="70"
+              value={passingScore}
+              onChange={(e) => setPassingScore(e.target.value)}
+              required
+            />
+            <p className="text-xs text-muted-foreground">
+              Siswa wajib mencapai nilai ini agar dinyatakan lulus dan membuka materi bab selanjutnya.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="quiz-desc">Petunjuk Kuis (Opsional)</Label>
+            <Textarea
+              id="quiz-desc"
+              placeholder="Pilih satu jawaban yang paling tepat untuk setiap pertanyaan..."
+              value={quizDesc}
+              onChange={(e) => setQuizDesc(e.target.value)}
+              rows={2}
+            />
+          </div>
+
+          <div className="space-y-3 rounded-lg border bg-muted/40 p-3">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+              <Shuffle className="h-3.5 w-3.5 text-primary" />
+              <span>Pengacakan Soal & Pilihan Jawaban (Anti-Mencontek)</span>
+            </div>
+
+            <label className="flex items-start gap-2.5 text-xs cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={shuffleQuestions}
+                onChange={(e) => setShuffleQuestions(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-input text-primary focus:ring-primary"
+              />
+              <div>
+                <span className="font-medium text-foreground">Acak Urutan Soal (Shuffle Questions)</span>
+                <p className="text-muted-foreground text-[11px] leading-relaxed">
+                  Urutan butir soal akan diacak otomatis setiap siswa mengerjakan atau mengulang kuis (remedial).
+                </p>
+              </div>
+            </label>
+
+            <label className="flex items-start gap-2.5 text-xs cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={shuffleOptions}
+                onChange={(e) => setShuffleOptions(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-input text-primary focus:ring-primary"
+              />
+              <div>
+                <span className="font-medium text-foreground">Acak Urutan Pilihan Jawaban A, B, C, D (Shuffle Options)</span>
+                <p className="text-muted-foreground text-[11px] leading-relaxed">
+                  Posisi pilihan A, B, C, D diacak di layar siswa tanpa memengaruhi kunci jawaban dan akurasi penilaian.
+                </p>
+              </div>
+            </label>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={() => setIsQuizModalOpen(false)}>
+              Batal
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? 'Menyimpan...' : editQuizTarget ? 'Simpan Perubahan' : 'Buat Kuis'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* ==================================================================== */}
+      {/* MODAL: Hapus Kuis */}
+      {/* ==================================================================== */}
+      <Modal
+        isOpen={!!deleteQuizTarget}
+        onClose={() => setDeleteQuizTarget(null)}
+        title="Hapus Kuis"
+        description="Apakah Anda yakin ingin menghapus kuis ini?"
+      >
+        <div className="space-y-4">
+          {error && <div className="rounded-md bg-destructive/10 p-3 text-xs text-destructive">{error}</div>}
+          <p className="text-sm">
+            Kuis <strong>{deleteQuizTarget?.title}</strong> beserta seluruh butir soal, kunci jawaban, dan riwayat nilai
+            siswa akan dihapus.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setDeleteQuizTarget(null)}>
+              Batal
+            </Button>
+            <Button type="button" variant="destructive" onClick={handleDeleteQuiz} disabled={loading}>
+              {loading ? 'Menghapus...' : 'Ya, Hapus'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ==================================================================== */}
+      {/* MODAL: Tambah / Edit Soal & Kunci Jawaban */}
+      {/* ==================================================================== */}
+      <Modal
+        isOpen={isQuestionModalOpen}
+        onClose={() => setIsQuestionModalOpen(false)}
+        title={editQuestionTarget ? 'Ubah Soal Kuis' : 'Tambah Soal Pilihan Ganda'}
+        description={`Kuis: ${questionQuizTarget?.title || ''}`}
+        maxWidth="lg"
+      >
+        <form onSubmit={handleSaveQuestion} className="space-y-4">
+          {error && <div className="rounded-md bg-destructive/10 p-3 text-xs text-destructive">{error}</div>}
+
+          <div className="space-y-2">
+            <Label htmlFor="q-text">Pertanyaan / Soal</Label>
+            <Textarea
+              id="q-text"
+              placeholder="Tuliskan pertanyaan soal pilihan ganda di sini..."
+              value={qText}
+              onChange={(e) => setQText(e.target.value)}
+              rows={3}
+              required
+            />
+          </div>
+
+          <div className="space-y-3">
+            <Label className="text-xs uppercase tracking-wider font-semibold">Pilihan Jawaban</Label>
+
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-md bg-muted font-bold text-xs shrink-0">
+                  A
+                </span>
+                <Input
+                  placeholder="Pilihan A"
+                  value={optA}
+                  onChange={(e) => setOptA(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-md bg-muted font-bold text-xs shrink-0">
+                  B
+                </span>
+                <Input
+                  placeholder="Pilihan B"
+                  value={optB}
+                  onChange={(e) => setOptB(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-md bg-muted font-bold text-xs shrink-0">
+                  C
+                </span>
+                <Input
+                  placeholder="Pilihan C"
+                  value={optC}
+                  onChange={(e) => setOptC(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-md bg-muted font-bold text-xs shrink-0">
+                  D
+                </span>
+                <Input
+                  placeholder="Pilihan D"
+                  value={optD}
+                  onChange={(e) => setOptD(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* KUNCI JAWABAN */}
+          <div className="space-y-2 rounded-lg border bg-amber-500/10 border-amber-500/30 p-3">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 dark:text-amber-400">
+              <KeyRound className="h-4 w-4" />
+              <span>Kunci Jawaban yang Benar (Disimpan ke question_keys)</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Kunci ini dirahasiakan dan tidak akan dapat dilihat oleh siswa di jaringan/browser.
+            </p>
+            <div className="grid grid-cols-4 gap-2 pt-1">
+              {(['A', 'B', 'C', 'D'] as const).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setCorrectOpt(k)}
+                  className={`flex items-center justify-center rounded-md border py-2 font-bold text-sm transition-all ${
+                    correctOpt === k
+                      ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm'
+                      : 'border-input bg-background hover:bg-muted'
+                  }`}
+                >
+                  {k}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={() => setIsQuestionModalOpen(false)}>
+              Batal
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? 'Menyimpan...' : editQuestionTarget ? 'Simpan Perubahan' : 'Simpan Soal'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* ==================================================================== */}
+      {/* MODAL: Kelola Daftar Soal dalam Kuis */}
+      {/* ==================================================================== */}
+      <Modal
+        isOpen={!!viewQuestionsQuizTarget}
+        onClose={() => setViewQuestionsQuizTarget(null)}
+        title={`Daftar Soal: ${viewQuestionsQuizTarget?.title || ''}`}
+        description="Kelola dan periksa butir soal beserta kunci jawaban."
+        maxWidth="xl"
+      >
+        <div className="space-y-4">
+          <div className="flex justify-between items-center pb-2 border-b">
+            <Badge variant="outline">
+              Total {viewQuestionsQuizTarget?.questions?.length || 0} Soal
+            </Badge>
+            <Button
+              size="sm"
+              className="gap-1 text-xs"
+              onClick={() => {
+                const target = viewQuestionsQuizTarget
+                if (target) openAddQuestion(target)
+              }}
+            >
+              <Plus className="h-3.5 w-3.5" /> Tambah Soal Baru
+            </Button>
+          </div>
+
+          {(!viewQuestionsQuizTarget?.questions || viewQuestionsQuizTarget.questions.length === 0) ? (
+            <p className="py-6 text-center text-xs text-muted-foreground italic">
+              Belum ada soal pada kuis ini. Klik tombol di atas untuk membuat soal pilihan ganda.
+            </p>
+          ) : (
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+              {viewQuestionsQuizTarget.questions.map((q, qIdx) => (
+                <div key={q.id} className="rounded-lg border bg-card p-3.5 text-xs space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-semibold text-sm text-foreground">
+                      {qIdx + 1}. {q.question_text}
+                    </p>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 w-7 p-0"
+                        onClick={() => {
+                          if (viewQuestionsQuizTarget) openEditQuestion(viewQuestionsQuizTarget, q)
+                        }}
+                      >
+                        <Edit2 className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10"
+                        onClick={() => setDeleteQuestionTarget(q)}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-1.5 pt-1">
+                    {q.options.map((opt) => (
+                      <div
+                        key={opt.key}
+                        className={`flex items-center gap-1.5 rounded-md p-1.5 border ${
+                          opt.key === q.correct_option
+                            ? 'border-emerald-500 bg-emerald-500/10 font-bold text-emerald-700 dark:text-emerald-400'
+                            : 'border-muted bg-muted/30 text-muted-foreground'
+                        }`}
+                      >
+                        <span className="font-mono">{opt.key}.</span>
+                        <span className="truncate">{opt.text}</span>
+                        {opt.key === q.correct_option && (
+                          <CheckCircle2 className="h-3.5 w-3.5 ml-auto text-emerald-600 shrink-0" />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex justify-end pt-2">
+            <Button variant="outline" onClick={() => setViewQuestionsQuizTarget(null)}>
+              Tutup
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ==================================================================== */}
+      {/* MODAL: Hapus Soal */}
+      {/* ==================================================================== */}
+      <Modal
+        isOpen={!!deleteQuestionTarget}
+        onClose={() => setDeleteQuestionTarget(null)}
+        title="Hapus Soal"
+        description="Apakah Anda yakin ingin menghapus butir soal ini?"
+      >
+        <div className="space-y-4">
+          {error && <div className="rounded-md bg-destructive/10 p-3 text-xs text-destructive">{error}</div>}
+          <p className="text-sm">
+            Soal <strong>&quot;{deleteQuestionTarget?.question_text}&quot;</strong> akan dihapus dari kuis.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setDeleteQuestionTarget(null)}>
+              Batal
+            </Button>
+            <Button type="button" variant="destructive" onClick={handleDeleteQuestion} disabled={loading}>
+              {loading ? 'Menghapus...' : 'Ya, Hapus'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ==================================================================== */}
+      {/* MODAL: Pratinjau Materi Guru */}
+      {/* ==================================================================== */}
+      <Modal
+        isOpen={!!viewMaterialTarget}
+        onClose={() => setViewMaterialTarget(null)}
+        title={viewMaterialTarget?.title || 'Detail Materi'}
+        description="Pratinjau materi seperti yang dilihat siswa."
+        maxWidth="2xl"
+      >
+        <div className="space-y-6">
+          {viewMaterialTarget?.video_url && (
+            <VideoEmbed url={viewMaterialTarget.video_url} title={viewMaterialTarget.title} />
+          )}
+
+          <div className="rounded-lg border bg-card p-4 sm:p-5">
+            <TipTapViewer content={viewMaterialTarget?.content} />
+          </div>
+
+          <div className="flex justify-end">
+            <Button type="button" variant="outline" onClick={() => setViewMaterialTarget(null)}>
+              Tutup
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal Kelola Simulasi Materi */}
+      {simulationMaterialTarget && (
+        <SimulationManagerModal
+          isOpen={!!simulationMaterialTarget}
+          onClose={() => setSimulationMaterialTarget(null)}
+          materialId={simulationMaterialTarget.id}
+          materialTitle={simulationMaterialTarget.title}
+          classId={classId}
+          initialSimulations={simulationMaterialTarget.simulations || []}
+        />
+      )}
+    </div>
+  )
+}
