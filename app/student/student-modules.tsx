@@ -19,7 +19,9 @@ import {
   RotateCcw,
   Trophy,
   Video,
+  Clock,
 } from 'lucide-react'
+import { formatDateTimeId } from '@/lib/assignment-utils'
 
 export type MaterialSummary = {
   id: string
@@ -41,6 +43,7 @@ export type QuizSummary = {
   is_unlocked: boolean
   is_passed: boolean
   last_score?: number | null
+  due_at?: string | null
 }
 
 export type ModuleSummary = {
@@ -434,6 +437,12 @@ export function StudentModulesDashboard({ className, referralCode, modules }: St
                                   <p className="text-xs text-muted-foreground mt-0.5">
                                     KKM: {qz.passing_score}% • {qz.total_questions} Soal Pilihan Ganda
                                   </p>
+                                  {qz.due_at && (
+                                    <p className="text-[11px] font-medium text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
+                                      <Clock className="h-3 w-3" />
+                                      Disarankan selesai sebelum {formatDateTimeId(qz.due_at)} WIB
+                                    </p>
+                                  )}
                                 </div>
                               </div>
 

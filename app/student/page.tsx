@@ -30,6 +30,7 @@ export default async function StudentHome() {
       { data: completions },
       { data: rawQuizzes },
       { data: quizProgress },
+      { data: rawAttempts },
       { data: rawAssignments },
       { data: mySubmissions },
       { data: myExtensions },
@@ -63,16 +64,29 @@ export default async function StudentHome() {
         .select(`
           id,
           module_id,
+          class_id,
+          subject_id,
+          type,
           title,
           description,
           passing_score,
+          open_at,
+          due_at,
+          close_at,
+          allow_late,
+          max_attempts,
           order_index,
+          subjects:subject_id (id, name),
           questions (count)
         `)
         .order('order_index', { ascending: true }),
       supabase
         .from('student_progress')
         .select('quiz_id, highest_score, is_passed')
+        .eq('student_id', profile.id),
+      supabase
+        .from('quiz_attempts')
+        .select('id, quiz_id, score, passed, attempted_at, is_late')
         .eq('student_id', profile.id),
       supabase
         .from('assignments')
@@ -170,6 +184,8 @@ export default async function StudentHome() {
           title: qz.title,
           description: qz.description,
           passing_score: qz.passing_score,
+          due_at: qz.due_at,
+          type: qz.type ?? 'chapter',
           total_questions: qz.questions?.[0]?.count ?? 0,
           is_unlocked: isUnlocked,
           is_passed: isPassed,
@@ -231,17 +247,82 @@ export default async function StudentHome() {
       .sort((a: any, b: any) => a.due_timestamp - b.due_timestamp)
       .slice(0, 6)
 
-    // 4. Kumpulkan kuis penilaian aktif (yang sudah terbuka tapi belum lulus)
+    // 4. Kumpulkan kuis penilaian aktif & kuis bab yang perlu dikerjakan
+    const attemptsByQuiz = new Map<string, any[]>()
+    ;(rawAttempts ?? []).forEach((att: any) => {
+      const list = attemptsByQuiz.get(att.quiz_id) || []
+      list.push(att)
+      attemptsByQuiz.set(att.quiz_id, list)
+    })
+
+    // Kuis Penilaian (Assessment) di kelas ini
+    ;(rawQuizzes ?? [])
+      .filter((q: any) => q.type === 'assessment' && (q.class_id === classId || !q.class_id))
+      .forEach((qz: any) => {
+        const atts = attemptsByQuiz.get(qz.id) || []
+        const attemptsCount = atts.length
+        const highestScore = atts.length > 0 ? Math.max(...atts.map((a: any) => Number(a.score))) : null
+        const isPassed = atts.some((a: any) => Boolean(a.passed))
+        const maxAtt = qz.max_attempts || 1
+
+        let status: 'belum_dibuka' | 'terbuka' | 'ditutup' | 'sudah_dikerjakan' = 'terbuka'
+        let statusLabel = 'Terbuka'
+        let canTake = true
+
+        if (attemptsCount >= maxAtt || isPassed) {
+          status = 'sudah_dikerjakan'
+          statusLabel = 'Sudah Dikerjakan'
+          canTake = false
+        } else if (qz.open_at && now < new Date(qz.open_at)) {
+          status = 'belum_dibuka'
+          statusLabel = 'Belum Dibuka'
+          canTake = false
+        } else if (
+          (qz.close_at && now > new Date(qz.close_at)) ||
+          (!qz.allow_late && qz.due_at && now > new Date(qz.due_at))
+        ) {
+          status = 'ditutup'
+          statusLabel = 'Ditutup'
+          canTake = false
+        }
+
+        activeQuizzes.push({
+          id: qz.id,
+          title: qz.title,
+          type: 'assessment',
+          subject_name: qz.subjects?.name ?? 'Mata Pelajaran',
+          passing_score: qz.passing_score,
+          total_questions: qz.questions?.[0]?.count ?? 0,
+          status,
+          status_label: statusLabel,
+          open_at: qz.open_at,
+          due_at: qz.due_at,
+          close_at: qz.close_at,
+          max_attempts: qz.max_attempts,
+          attempts_count: attemptsCount,
+          highest_score: highestScore,
+          is_passed: isPassed,
+          can_take: canTake,
+        })
+      })
+
+    // Kuis Bab yang sudah terbuka tapi belum lulus
     modules.forEach((mod) => {
       ;(mod.quizzes ?? []).forEach((qz) => {
         if (qz.is_unlocked && !qz.is_passed) {
           activeQuizzes.push({
             id: qz.id,
             title: qz.title,
+            type: 'chapter',
             module_title: mod.title,
             subject_name: mod.subject_name,
             passing_score: qz.passing_score,
             total_questions: qz.total_questions,
+            status: 'terbuka',
+            status_label: 'Kuis Bab',
+            due_at: qz.due_at,
+            attempts_count: 0,
+            can_take: true,
           })
         }
       })

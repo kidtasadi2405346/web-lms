@@ -180,3 +180,18 @@ export function formatDateTimeId(dateStr: string | Date): string {
     minute: '2-digit',
   })
 }
+
+/**
+ * Format tanggal Indonesia dengan zona waktu WIB eksplisit.
+ */
+export function formatDateTimeWib(dateStr: string | Date): string {
+  const d = new Date(dateStr)
+  return d.toLocaleString('id-ID', {
+    timeZone: 'Asia/Jakarta',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }) + ' WIB'
+}

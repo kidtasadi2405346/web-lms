@@ -3,7 +3,7 @@
 import { Suspense } from 'react'
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
-import { BookOpen, FileText, LayoutDashboard, School, UserCheck, Users, type LucideIcon } from 'lucide-react'
+import { BookOpen, FileText, LayoutDashboard, School, UserCheck, Users, HelpCircle, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Role } from '@/lib/roles'
 
@@ -19,6 +19,7 @@ const NAV: Record<Role, NavItem[]> = {
   student: [
     { href: '/student', label: 'Pelajaran saya', icon: BookOpen },
     { href: '/student/tugas', label: 'Tugas saya', icon: FileText },
+    { href: '/student/kuis', label: 'Kuis & Ujian', icon: HelpCircle },
   ],
   teacher: [{ href: '/teacher', label: 'Kelas saya', icon: School }],
   admin: [
