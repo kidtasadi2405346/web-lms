@@ -11,6 +11,11 @@ import Highlight from '@tiptap/extension-highlight'
 import TextAlign from '@tiptap/extension-text-align'
 import Subscript from '@tiptap/extension-subscript'
 import Superscript from '@tiptap/extension-superscript'
+import { Table } from '@tiptap/extension-table'
+import { TableRow } from '@tiptap/extension-table-row'
+import { TableCell } from '@tiptap/extension-table-cell'
+import { TableHeader } from '@tiptap/extension-table-header'
+import { Placeholder } from '@tiptap/extension-placeholder'
 import {
   Bold,
   Italic,
@@ -22,6 +27,8 @@ import {
   ListOrdered,
   Quote,
   Code,
+  FileCode,
+  Minus,
   Undo2,
   Redo2,
   Link2,
@@ -37,6 +44,10 @@ import {
   X,
   ImageIcon,
   Loader2,
+  Table as TableIcon,
+  Plus,
+  Trash2,
+  Omega,
 } from 'lucide-react'
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
@@ -53,6 +64,7 @@ import {
   ALLOWED_FONT_SIZES,
   PRESET_COLORS,
   PRESET_HIGHLIGHTS,
+  ELECTRICAL_SYMBOLS,
 } from './editor-constants'
 
 interface TipTapEditorProps {
@@ -61,11 +73,20 @@ interface TipTapEditorProps {
   placeholder?: string
 }
 
-export function TipTapEditor({ value = '', onChange, placeholder = 'Tulis isi materi di sini...' }: TipTapEditorProps) {
+export function TipTapEditor({
+  value = '',
+  onChange,
+  placeholder = 'Tulis isi materi di sini...',
+}: TipTapEditorProps) {
   const [showColorPicker, setShowColorPicker] = useState(false)
   const [showHighlightPicker, setShowHighlightPicker] = useState(false)
+  const [showTableMenu, setShowTableMenu] = useState(false)
+  const [showSymbolPicker, setShowSymbolPicker] = useState(false)
+
   const colorPickerRef = useRef<HTMLDivElement>(null)
   const highlightPickerRef = useRef<HTMLDivElement>(null)
+  const tableMenuRef = useRef<HTMLDivElement>(null)
+  const symbolPickerRef = useRef<HTMLDivElement>(null)
 
   // State untuk Upload Gambar
   const [isImageModalOpen, setIsImageModalOpen] = useState(false)
@@ -88,6 +109,12 @@ export function TipTapEditor({ value = '', onChange, placeholder = 'Tulis isi ma
       if (highlightPickerRef.current && !highlightPickerRef.current.contains(event.target as Node)) {
         setShowHighlightPicker(false)
       }
+      if (tableMenuRef.current && !tableMenuRef.current.contains(event.target as Node)) {
+        setShowTableMenu(false)
+      }
+      if (symbolPickerRef.current && !symbolPickerRef.current.contains(event.target as Node)) {
+        setShowSymbolPicker(false)
+      }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
@@ -109,6 +136,11 @@ export function TipTapEditor({ value = '', onChange, placeholder = 'Tulis isi ma
         heading: {
           levels: [2, 3],
         },
+        codeBlock: {
+          HTMLAttributes: {
+            class: 'rounded-lg bg-muted p-4 font-mono text-sm border my-4 overflow-x-auto',
+          },
+        },
       }),
       Underline,
       TextStyle,
@@ -127,6 +159,27 @@ export function TipTapEditor({ value = '', onChange, placeholder = 'Tulis isi ma
       }),
       Subscript,
       Superscript,
+      Table.configure({
+        resizable: true,
+        HTMLAttributes: {
+          class: 'border-collapse table-auto w-full border border-border my-4 overflow-hidden rounded-lg',
+        },
+      }),
+      TableRow,
+      TableHeader.configure({
+        HTMLAttributes: {
+          class: 'border border-border bg-muted/60 p-2.5 text-left font-semibold text-xs',
+        },
+      }),
+      TableCell.configure({
+        HTMLAttributes: {
+          class: 'border border-border p-2.5 text-xs',
+        },
+      }),
+      Placeholder.configure({
+        placeholder,
+        emptyEditorClass: 'is-editor-empty',
+      }),
       CustomImage,
       Link.configure({
         openOnClick: false,
@@ -204,10 +257,7 @@ export function TipTapEditor({ value = '', onChange, placeholder = 'Tulis isi ma
     setUploadError(null)
 
     try {
-      // 1. Validasi & Kompres gambar di browser (maks 1600px, WebP, < 2MB)
       const processed = await processImageForUpload(selectedImageFile, 1600)
-
-      // 2. Dapatkan user session guru
       const supabase = createClient()
       const {
         data: { user },
@@ -218,7 +268,6 @@ export function TipTapEditor({ value = '', onChange, placeholder = 'Tulis isi ma
         throw new Error('Sesi masuk tidak ditemukan. Harap muat ulang halaman.')
       }
 
-      // 3. Upload ke bucket material-images: path {teacher_id}/{uuid}.{ext}
       const fileExt = processed.file.type === 'image/gif' ? 'gif' : 'webp'
       const randomId = crypto.randomUUID()
       const storagePath = `${user.id}/${randomId}.${fileExt}`
@@ -234,17 +283,14 @@ export function TipTapEditor({ value = '', onChange, placeholder = 'Tulis isi ma
         throw new Error(`Gagal mengunggah gambar: ${uploadErr.message}`)
       }
 
-      // 4. Dapatkan public URL
       const {
         data: { publicUrl },
       } = supabase.storage.from('material-images').getPublicUrl(storagePath)
 
-      // 5. Tentukan kelas ukuran dan perataan gambar
       const sizeClass = `image-size-${imageSize}`
       const alignClass = `image-align-${imageAlign}`
       const combinedClass = `${sizeClass} ${alignClass} rounded-lg shadow-sm max-w-full h-auto`
 
-      // 6. Sisipkan gambar ke editor
       if (editor) {
         editor
           .chain()
@@ -257,7 +303,6 @@ export function TipTapEditor({ value = '', onChange, placeholder = 'Tulis isi ma
           .run()
       }
 
-      // Reset modal state
       setIsImageModalOpen(false)
       setSelectedImageFile(null)
       setImagePreviewUrl(null)
@@ -430,6 +475,8 @@ export function TipTapEditor({ value = '', onChange, placeholder = 'Tulis isi ma
             onClick={() => {
               setShowColorPicker((prev) => !prev)
               setShowHighlightPicker(false)
+              setShowTableMenu(false)
+              setShowSymbolPicker(false)
             }}
             title="Warna Teks"
             aria-label="Pilih Warna Teks"
@@ -484,6 +531,8 @@ export function TipTapEditor({ value = '', onChange, placeholder = 'Tulis isi ma
             onClick={() => {
               setShowHighlightPicker((prev) => !prev)
               setShowColorPicker(false)
+              setShowTableMenu(false)
+              setShowSymbolPicker(false)
             }}
             title="Sorotan Teks (Highlight)"
             aria-label="Pilih Sorotan Teks"
@@ -604,7 +653,7 @@ export function TipTapEditor({ value = '', onChange, placeholder = 'Tulis isi ma
 
         <div className="mx-1 h-5 w-[1px] bg-border shrink-0" />
 
-        {/* List & Quotes */}
+        {/* List, Quotes, Code Block, Horizontal Rule */}
         <Button
           type="button"
           size="sm"
@@ -649,6 +698,184 @@ export function TipTapEditor({ value = '', onChange, placeholder = 'Tulis isi ma
         >
           <Code className="h-4 w-4" />
         </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={editor.isActive('codeBlock') ? 'secondary' : 'ghost'}
+          className="h-8 w-8 p-0"
+          onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+          title="Blok Kode"
+          aria-label="Blok Kode"
+        >
+          <FileCode className="h-4 w-4" />
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-8 w-8 p-0"
+          onClick={() => editor.chain().focus().setHorizontalRule().run()}
+          title="Garis Pemisah Horizontal"
+          aria-label="Garis Pemisah"
+        >
+          <Minus className="h-4 w-4" />
+        </Button>
+
+        <div className="mx-1 h-5 w-[1px] bg-border shrink-0" />
+
+        {/* Menu Tabel (Spesifikasi Praktik & Tabel Resistor) */}
+        <div className="relative inline-flex" ref={tableMenuRef}>
+          <Button
+            type="button"
+            size="sm"
+            variant={editor.isActive('table') ? 'secondary' : 'ghost'}
+            className="h-8 px-2 gap-1 text-xs"
+            onClick={() => {
+              setShowTableMenu((prev) => !prev)
+              setShowColorPicker(false)
+              setShowHighlightPicker(false)
+              setShowSymbolPicker(false)
+            }}
+            title="Kelola Tabel"
+            aria-label="Tabel"
+          >
+            <TableIcon className="h-4 w-4" />
+            <ChevronDown className="h-3 w-3 opacity-60" />
+          </Button>
+
+          {showTableMenu && (
+            <div className="absolute top-full left-0 mt-1 z-20 w-52 rounded-md border bg-popover p-2 shadow-md text-xs space-y-1">
+              {!editor.isActive('table') ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-start text-xs h-7 gap-1.5"
+                  onClick={() => {
+                    editor
+                      .chain()
+                      .focus()
+                      .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
+                      .run()
+                    setShowTableMenu(false)
+                  }}
+                >
+                  <Plus className="h-3.5 w-3.5" /> Sisipkan Tabel (3x3)
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-start text-xs h-7 gap-1.5"
+                    onClick={() => {
+                      editor.chain().focus().addRowAfter().run()
+                      setShowTableMenu(false)
+                    }}
+                  >
+                    Tambah Baris Bawah
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-start text-xs h-7 gap-1.5"
+                    onClick={() => {
+                      editor.chain().focus().deleteRow().run()
+                      setShowTableMenu(false)
+                    }}
+                  >
+                    Hapus Baris Ini
+                  </Button>
+                  <div className="h-[1px] bg-border my-1" />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-start text-xs h-7 gap-1.5"
+                    onClick={() => {
+                      editor.chain().focus().addColumnAfter().run()
+                      setShowTableMenu(false)
+                    }}
+                  >
+                    Tambah Kolom Kanan
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-start text-xs h-7 gap-1.5"
+                    onClick={() => {
+                      editor.chain().focus().deleteColumn().run()
+                      setShowTableMenu(false)
+                    }}
+                  >
+                    Hapus Kolom Ini
+                  </Button>
+                  <div className="h-[1px] bg-border my-1" />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-start text-xs h-7 gap-1.5 text-destructive hover:text-destructive"
+                    onClick={() => {
+                      editor.chain().focus().deleteTable().run()
+                      setShowTableMenu(false)
+                    }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" /> Hapus Tabel
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Pemilih Simbol Elektro & K3LH */}
+        <div className="relative inline-flex" ref={symbolPickerRef}>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-8 px-2 gap-1 text-xs"
+            onClick={() => {
+              setShowSymbolPicker((prev) => !prev)
+              setShowColorPicker(false)
+              setShowHighlightPicker(false)
+              setShowTableMenu(false)
+            }}
+            title="Sisipkan Simbol Kelistrikan & Matematika"
+            aria-label="Simbol"
+          >
+            <Omega className="h-4 w-4 text-primary" />
+            <span className="text-[11px] font-medium hidden sm:inline">Simbol</span>
+          </Button>
+
+          {showSymbolPicker && (
+            <div className="absolute top-full left-0 mt-1 z-20 w-64 rounded-md border bg-popover p-2.5 shadow-md">
+              <div className="text-[11px] font-semibold text-muted-foreground mb-2 px-1">
+                Simbol Kelistrikan & Matematika
+              </div>
+              <div className="grid grid-cols-6 gap-1">
+                {ELECTRICAL_SYMBOLS.map((item) => (
+                  <button
+                    key={item.symbol}
+                    type="button"
+                    title={`${item.name} (${item.symbol})`}
+                    onClick={() => {
+                      editor.chain().focus().insertContent(item.symbol).run()
+                      setShowSymbolPicker(false)
+                    }}
+                    className="h-8 w-8 rounded border border-border bg-background hover:bg-accent hover:text-accent-foreground text-sm font-semibold flex items-center justify-center transition-colors"
+                  >
+                    {item.symbol}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Sisipkan Gambar */}
         <Button
@@ -705,8 +932,10 @@ export function TipTapEditor({ value = '', onChange, placeholder = 'Tulis isi ma
         </div>
       </div>
 
-      {/* Editor Content Area */}
-      <EditorContent editor={editor} />
+      {/* Editor Content Area (dengan kontainer overflow untuk tabel responsif) */}
+      <div className="overflow-x-auto w-full">
+        <EditorContent editor={editor} />
+      </div>
 
       {/* Modal Dialog Konfigurasi Gambar */}
       <Modal

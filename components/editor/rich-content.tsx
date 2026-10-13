@@ -18,9 +18,10 @@ export const RICH_CONTENT_PROSE_CLASSES = `prose prose-neutral dark:prose-invert
   prose-code:bg-muted prose-code:text-foreground prose-code:rounded prose-code:px-1.5 prose-code:py-0.5 prose-code:font-mono prose-code:text-sm prose-code:before:content-none prose-code:after:content-none
   prose-pre:bg-muted prose-pre:text-foreground prose-pre:border prose-pre:rounded-lg prose-pre:p-4 prose-pre:my-3
   prose-hr:my-6 prose-hr:border-border
-  prose-table:w-full prose-table:my-4 prose-table:border-collapse
-  prose-th:border prose-th:border-border prose-th:p-2 prose-th:bg-muted/50 prose-th:text-left prose-th:font-semibold
-  prose-td:border prose-td:border-border prose-td:p-2
+  prose-table:w-full prose-table:my-4 prose-table:border-collapse prose-table:table-auto
+  prose-th:border prose-th:border-border prose-th:p-2.5 prose-th:bg-muted/60 prose-th:text-left prose-th:font-semibold prose-th:text-xs
+  prose-td:border prose-td:border-border prose-td:p-2.5 prose-td:text-xs
+  [&_.is-editor-empty:first-child::before]:text-muted-foreground/60 [&_.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_.is-editor-empty:first-child::before]:float-left [&_.is-editor-empty:first-child::before]:pointer-events-none [&_.is-editor-empty:first-child::before]:h-0
   prose-img:rounded-lg prose-img:my-4 prose-img:shadow-sm prose-img:max-w-full prose-img:h-auto [&_.image-align-left]:mr-auto [&_.image-align-center]:mx-auto [&_.image-align-right]:ml-auto [&_.image-size-small]:w-1/3 [&_.image-size-medium]:w-2/3 [&_.image-size-full]:w-full`
 
 export function RichContent({ content, className = '' }: RichContentProps) {

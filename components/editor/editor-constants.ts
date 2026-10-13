@@ -34,3 +34,25 @@ export const PRESET_HIGHLIGHTS = [
 ] as const
 
 export const ALLOWED_TEXT_ALIGNS = ['left', 'center', 'right', 'justify'] as const
+
+export const ELECTRICAL_SYMBOLS = [
+  { symbol: 'Ω', name: 'Ohm (Hambatan)' },
+  { symbol: 'µ', name: 'Mikro' },
+  { symbol: '±', name: 'Toleransi' },
+  { symbol: '°', name: 'Derajat' },
+  { symbol: '≈', name: 'Mendekati' },
+  { symbol: '≠', name: 'Tidak sama dengan' },
+  { symbol: '≤', name: 'Kurang dari sama dengan' },
+  { symbol: '≥', name: 'Lebih dari sama dengan' },
+  { symbol: '→', name: 'Panah kanan' },
+  { symbol: '⇒', name: 'Maka' },
+  { symbol: 'Δ', name: 'Delta' },
+  { symbol: 'π', name: 'Pi' },
+  { symbol: '√', name: 'Akar kuadrat' },
+  { symbol: '×', name: 'Kali' },
+  { symbol: '÷', name: 'Bagi' },
+  { symbol: '²', name: 'Kuadrat' },
+  { symbol: '³', name: 'Kubik' },
+  { symbol: '⁻¹', name: 'Pangkat minus satu' },
+] as const
+
