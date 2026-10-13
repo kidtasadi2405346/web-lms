@@ -35,11 +35,19 @@ import {
   Highlighter,
   ChevronDown,
   X,
+  ImageIcon,
+  Loader2,
 } from 'lucide-react'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Modal } from '@/components/ui/modal'
+import { createClient } from '@/lib/supabase/client'
 import { RICH_CONTENT_PROSE_CLASSES } from './rich-content'
 import { FontSize } from './font-size-extension'
+import { CustomImage } from './custom-image-extension'
+import { processImageForUpload } from '@/lib/image-processor'
 import {
   ALLOWED_FONT_FAMILIES,
   ALLOWED_FONT_SIZES,
@@ -59,6 +67,18 @@ export function TipTapEditor({ value = '', onChange, placeholder = 'Tulis isi ma
   const colorPickerRef = useRef<HTMLDivElement>(null)
   const highlightPickerRef = useRef<HTMLDivElement>(null)
 
+  // State untuk Upload Gambar
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false)
+  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null)
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
+  const [imageAlt, setImageAlt] = useState('')
+  const [isDecorative, setIsDecorative] = useState(false)
+  const [imageSize, setImageSize] = useState<'small' | 'medium' | 'full'>('medium')
+  const [imageAlign, setImageAlign] = useState<'left' | 'center' | 'right'>('center')
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   // Menutup popup saat klik di luar
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -71,6 +91,16 @@ export function TipTapEditor({ value = '', onChange, placeholder = 'Tulis isi ma
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const handlePrepareImageFile = useCallback((file: File) => {
+    setSelectedImageFile(file)
+    const prev = URL.createObjectURL(file)
+    setImagePreviewUrl(prev)
+    setImageAlt('')
+    setIsDecorative(false)
+    setUploadError(null)
+    setIsImageModalOpen(true)
   }, [])
 
   const editor = useEditor({
@@ -97,6 +127,7 @@ export function TipTapEditor({ value = '', onChange, placeholder = 'Tulis isi ma
       }),
       Subscript,
       Superscript,
+      CustomImage,
       Link.configure({
         openOnClick: false,
         HTMLAttributes: {
@@ -109,6 +140,35 @@ export function TipTapEditor({ value = '', onChange, placeholder = 'Tulis isi ma
     editorProps: {
       attributes: {
         class: `min-h-[260px] w-full rounded-b-md px-3 py-3 focus:outline-none ${RICH_CONTENT_PROSE_CLASSES}`,
+      },
+      handleDrop: (view, event) => {
+        const hasFiles = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files.length > 0
+        if (hasFiles) {
+          const file = event.dataTransfer.files[0]
+          if (file && file.type.startsWith('image/')) {
+            event.preventDefault()
+            handlePrepareImageFile(file)
+            return true
+          }
+        }
+        return false
+      },
+      handlePaste: (view, event) => {
+        const items = event.clipboardData && event.clipboardData.items
+        if (items) {
+          for (let i = 0; i < items.length; i++) {
+            const item = items[i]
+            if (item && item.type.startsWith('image/')) {
+              const file = item.getAsFile()
+              if (file) {
+                event.preventDefault()
+                handlePrepareImageFile(file)
+                return true
+              }
+            }
+          }
+        }
+        return false
       },
     },
     onUpdate: ({ editor }) => {
@@ -133,6 +193,82 @@ export function TipTapEditor({ value = '', onChange, placeholder = 'Tulis isi ma
     editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run()
   }
 
+  async function handleConfirmUploadImage() {
+    if (!selectedImageFile) return
+    if (!isDecorative && !imageAlt.trim()) {
+      setUploadError('Teks alternatif (alt) wajib diisi untuk aksesibilitas, atau tandai sebagai gambar dekoratif.')
+      return
+    }
+
+    setIsUploading(true)
+    setUploadError(null)
+
+    try {
+      // 1. Validasi & Kompres gambar di browser (maks 1600px, WebP, < 2MB)
+      const processed = await processImageForUpload(selectedImageFile, 1600)
+
+      // 2. Dapatkan user session guru
+      const supabase = createClient()
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser()
+
+      if (userError || !user) {
+        throw new Error('Sesi masuk tidak ditemukan. Harap muat ulang halaman.')
+      }
+
+      // 3. Upload ke bucket material-images: path {teacher_id}/{uuid}.{ext}
+      const fileExt = processed.file.type === 'image/gif' ? 'gif' : 'webp'
+      const randomId = crypto.randomUUID()
+      const storagePath = `${user.id}/${randomId}.${fileExt}`
+
+      const { error: uploadErr } = await supabase.storage
+        .from('material-images')
+        .upload(storagePath, processed.file, {
+          cacheControl: '3600',
+          upsert: false,
+        })
+
+      if (uploadErr) {
+        throw new Error(`Gagal mengunggah gambar: ${uploadErr.message}`)
+      }
+
+      // 4. Dapatkan public URL
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from('material-images').getPublicUrl(storagePath)
+
+      // 5. Tentukan kelas ukuran dan perataan gambar
+      const sizeClass = `image-size-${imageSize}`
+      const alignClass = `image-align-${imageAlign}`
+      const combinedClass = `${sizeClass} ${alignClass} rounded-lg shadow-sm max-w-full h-auto`
+
+      // 6. Sisipkan gambar ke editor
+      if (editor) {
+        editor
+          .chain()
+          .focus()
+          .setImage({
+            src: publicUrl,
+            alt: isDecorative ? '' : imageAlt.trim(),
+          })
+          .updateAttributes('image', { class: combinedClass, loading: 'lazy' })
+          .run()
+      }
+
+      // Reset modal state
+      setIsImageModalOpen(false)
+      setSelectedImageFile(null)
+      setImagePreviewUrl(null)
+      setImageAlt('')
+    } catch (err: any) {
+      setUploadError(err.message || 'Terjadi kesalahan saat memproses gambar.')
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
   // Cari font family yang aktif
   const currentFontFamily = (() => {
     if (editor.isActive('textStyle', { fontFamily: 'serif' })) return 'serif'
@@ -145,6 +281,21 @@ export function TipTapEditor({ value = '', onChange, placeholder = 'Tulis isi ma
 
   return (
     <div className="flex flex-col rounded-lg border bg-background shadow-sm focus-within:ring-1 focus-within:ring-ring">
+      {/* Input File Tersembunyi untuk Sisipkan Gambar */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        className="hidden"
+        onChange={(e) => {
+          const files = e.target.files
+          if (files && files[0]) {
+            handlePrepareImageFile(files[0])
+            e.target.value = ''
+          }
+        }}
+      />
+
       {/* Sticky Toolbar Responsif */}
       <div className="sticky top-0 z-10 flex flex-wrap items-center gap-1 border-b bg-muted/40 backdrop-blur-sm p-1.5 overflow-x-auto rounded-t-lg">
         {/* Pilihan Font Family */}
@@ -498,6 +649,21 @@ export function TipTapEditor({ value = '', onChange, placeholder = 'Tulis isi ma
         >
           <Code className="h-4 w-4" />
         </Button>
+
+        {/* Sisipkan Gambar */}
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+          onClick={() => fileInputRef.current?.click()}
+          title="Sisipkan Gambar (Upload)"
+          aria-label="Sisipkan Gambar"
+        >
+          <ImageIcon className="h-4 w-4" />
+        </Button>
+
+        {/* Sisipkan Link */}
         <Button
           type="button"
           size="sm"
@@ -539,8 +705,135 @@ export function TipTapEditor({ value = '', onChange, placeholder = 'Tulis isi ma
         </div>
       </div>
 
-      {/* Editor Content */}
+      {/* Editor Content Area */}
       <EditorContent editor={editor} />
+
+      {/* Modal Dialog Konfigurasi Gambar */}
+      <Modal
+        isOpen={isImageModalOpen}
+        onClose={() => {
+          if (!isUploading) {
+            setIsImageModalOpen(false)
+            setSelectedImageFile(null)
+            setImagePreviewUrl(null)
+          }
+        }}
+        title="Sisipkan Gambar Materi"
+        description="Atur teks alternatif aksesibilitas, ukuran, dan posisi gambar sebelum disisipkan ke materi."
+        maxWidth="md"
+      >
+        <div className="space-y-4">
+          {/* Pratinjau Gambar */}
+          {imagePreviewUrl && (
+            <div className="relative rounded-lg border bg-muted/20 p-2 flex items-center justify-center max-h-48 overflow-hidden">
+              <img
+                src={imagePreviewUrl}
+                alt="Pratinjau"
+                className="max-h-44 object-contain rounded"
+              />
+            </div>
+          )}
+
+          {/* Teks Alternatif (Alt) */}
+          <div className="space-y-1.5">
+            <Label htmlFor="image-alt" className="text-xs font-semibold">
+              Teks Alternatif (Alt Text) {!isDecorative && <span className="text-destructive">*</span>}
+            </Label>
+            <Input
+              id="image-alt"
+              placeholder="Contoh: Rangkaian listrik seri dengan dua resistor dan saklar"
+              value={imageAlt}
+              disabled={isDecorative || isUploading}
+              onChange={(e) => setImageAlt(e.target.value)}
+              className="text-xs"
+            />
+            <div className="flex items-center gap-2 mt-1">
+              <input
+                id="is-decorative"
+                type="checkbox"
+                checked={isDecorative}
+                disabled={isUploading}
+                onChange={(e) => {
+                  setIsDecorative(e.target.checked)
+                  if (e.target.checked) setImageAlt('')
+                }}
+                className="h-3.5 w-3.5 rounded border-gray-300 text-primary focus:ring-primary"
+              />
+              <label htmlFor="is-decorative" className="text-[11px] text-muted-foreground cursor-pointer">
+                Tandai sebagai gambar dekoratif (tidak memerlukan teks deskripsi)
+              </label>
+            </div>
+          </div>
+
+          {/* Pilihan Ukuran & Perataan */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Ukuran Tampilan</Label>
+              <select
+                value={imageSize}
+                disabled={isUploading}
+                onChange={(e) => setImageSize(e.target.value as any)}
+                className="w-full h-8 rounded-md border border-input bg-background px-2 text-xs font-medium"
+              >
+                <option value="small">Kecil (Lebar 33%)</option>
+                <option value="medium">Sedang (Lebar 66%)</option>
+                <option value="full">Penuh (Lebar 100%)</option>
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Posisi / Perataan</Label>
+              <select
+                value={imageAlign}
+                disabled={isUploading}
+                onChange={(e) => setImageAlign(e.target.value as any)}
+                className="w-full h-8 rounded-md border border-input bg-background px-2 text-xs font-medium"
+              >
+                <option value="left">Rata Kiri</option>
+                <option value="center">Rata Tengah</option>
+                <option value="right">Rata Kanan</option>
+              </select>
+            </div>
+          </div>
+
+          {uploadError && (
+            <div className="rounded-md bg-destructive/10 p-2.5 text-xs text-destructive">
+              {uploadError}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 pt-2 border-t">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isUploading}
+              onClick={() => {
+                setIsImageModalOpen(false)
+                setSelectedImageFile(null)
+                setImagePreviewUrl(null)
+              }}
+            >
+              Batal
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={isUploading}
+              onClick={handleConfirmUploadImage}
+              className="gap-1.5"
+            >
+              {isUploading ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Mengunggah...
+                </>
+              ) : (
+                'Simpan & Sisipkan'
+              )}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }

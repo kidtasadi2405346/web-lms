@@ -11,14 +11,71 @@ const ALLOWED_COLOR_VALUES = PRESET_COLORS.map((c) => c.value.toLowerCase())
 const ALLOWED_HIGHLIGHT_VALUES = PRESET_HIGHLIGHTS.map((h) => h.value.toLowerCase())
 const ALLOWED_ALIGN_VALUES = ['left', 'center', 'right', 'justify']
 
-// Pastikan hook uponSanitizeAttribute terpasang hanya sekali jika DOMPurify tersedia
+// Pastikan hook uponSanitizeAttribute dan uponSanitizeElement terpasang hanya sekali jika DOMPurify tersedia
 let isHookRegistered = false
+
+export function isAllowedStorageImageUrl(urlStr: string): boolean {
+  try {
+    const parsed = new URL(urlStr)
+    // Cek hostname Supabase atau local supabase
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    let expectedHost = ''
+    if (supabaseUrl) {
+      try {
+        expectedHost = new URL(supabaseUrl).hostname
+      } catch {}
+    }
+
+    // Hostname harus cocok dengan SUPABASE_URL project ini atau localhost supabase jika development
+    const isMatchingHost =
+      (expectedHost && parsed.hostname === expectedHost) ||
+      parsed.hostname === 'ylnkugyttxtpzxigrsuq.supabase.co' ||
+      parsed.hostname === 'localhost' ||
+      parsed.hostname === '127.0.0.1'
+
+    if (!isMatchingHost) return false
+
+    // Pathname harus merujuk ke bucket public 'material-images'
+    return parsed.pathname.includes('/storage/v1/object/public/material-images/')
+  } catch {
+    return false
+  }
+}
 
 function registerSanitizeHooks() {
   if (isHookRegistered) return
   isHookRegistered = true
 
+  DOMPurify.addHook('uponSanitizeElement', (node, data) => {
+    // Validasi elemen <img>: HANYA izinkan gambar yang berasal dari bucket material-images proyek
+    if (data.tagName === 'img') {
+      const imgNode = node as HTMLImageElement
+      const src = imgNode.getAttribute('src') || ''
+
+      // Tolak data: dan javascript: atau url luar yang bukan dari bucket material-images
+      if (
+        !src ||
+        src.startsWith('data:') ||
+        src.startsWith('javascript:') ||
+        !isAllowedStorageImageUrl(src)
+      ) {
+        // Buang node atau batalkan src
+        if (imgNode.parentNode) {
+          imgNode.parentNode.removeChild(imgNode)
+        }
+      }
+    }
+  })
+
   DOMPurify.addHook('uponSanitizeAttribute', (node, data) => {
+    // Validasi link: hanya http dan https, cegah javascript:
+    if (data.attrName === 'href') {
+      const href = (data.attrValue || '').trim().toLowerCase()
+      if (href.startsWith('javascript:') || href.startsWith('data:')) {
+        data.attrValue = ''
+      }
+    }
+
     if (data.attrName === 'style') {
       const styleStr = data.attrValue || ''
       // Tolak berbahaya: url(), expression(), position, javascript, etc.
@@ -84,7 +141,7 @@ registerSanitizeHooks()
 
 /**
  * Membersihkan konten HTML dari potensi serangan XSS (Cross-Site Scripting)
- * dan membatasi style hanya pada atribut/nilai yang diizinkan.
+ * dan membatasi style serta tag image hanya dari storage resmi proyek.
  */
 export function sanitizeHtml(dirty?: string | null): string {
   if (!dirty || typeof dirty !== 'string') return ''
@@ -124,7 +181,20 @@ export function sanitizeHtml(dirty?: string | null): string {
       'sub',
       'sup',
       'mark',
+      'img',
     ],
-    ALLOWED_ATTR: ['href', 'target', 'rel', 'class', 'style', 'align'],
+    ALLOWED_ATTR: [
+      'href',
+      'target',
+      'rel',
+      'class',
+      'style',
+      'align',
+      'src',
+      'alt',
+      'loading',
+      'width',
+      'height',
+    ],
   })
 }

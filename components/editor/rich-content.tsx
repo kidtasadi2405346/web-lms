@@ -21,7 +21,7 @@ export const RICH_CONTENT_PROSE_CLASSES = `prose prose-neutral dark:prose-invert
   prose-table:w-full prose-table:my-4 prose-table:border-collapse
   prose-th:border prose-th:border-border prose-th:p-2 prose-th:bg-muted/50 prose-th:text-left prose-th:font-semibold
   prose-td:border prose-td:border-border prose-td:p-2
-  prose-img:rounded-lg prose-img:my-4 prose-img:shadow-sm`
+  prose-img:rounded-lg prose-img:my-4 prose-img:shadow-sm prose-img:max-w-full prose-img:h-auto [&_.image-align-left]:mr-auto [&_.image-align-center]:mx-auto [&_.image-align-right]:ml-auto [&_.image-size-small]:w-1/3 [&_.image-size-medium]:w-2/3 [&_.image-size-full]:w-full`
 
 export function RichContent({ content, className = '' }: RichContentProps) {
   if (!content || !content.trim() || content === '<p></p>') {
