@@ -86,17 +86,33 @@ export type QuestionItem = {
   correct_option?: string // Hanya ada untuk guru/admin
 }
 
+export type QuizType = 'chapter' | 'assessment'
+
 export type QuizItem = {
   id: string
-  module_id: string
+  module_id?: string | null
+  material_id?: string | null
+  class_id?: string | null
+  subject_id?: string | null
+  type?: QuizType
   title: string
   description?: string | null
   passing_score: number
+  open_at?: string | null
+  due_at?: string | null
+  close_at?: string | null
+  allow_late?: boolean
+  max_attempts?: number | null
   shuffle_questions?: boolean
   shuffle_options?: boolean
-  order_index: number
+  order_index?: number
   created_at?: string
   questions?: QuestionItem[]
+  // Joined relations
+  modules?: ModuleItem | null
+  classes?: ClassItem | null
+  subjects?: SubjectItem | null
+  materials?: MaterialItem | null
 }
 
 export type QuizAttemptItem = {
@@ -107,6 +123,7 @@ export type QuizAttemptItem = {
   passed: boolean
   answers: Record<string, string>
   attempted_at: string
+  is_late?: boolean
 }
 
 export type StudentProgressItem = {
@@ -125,6 +142,9 @@ export type QuizSubmissionResult = {
   passed: boolean
   total_questions: number
   correct_count: number
+  is_late?: boolean
+  type?: QuizType
+  attempts_left?: number | null
 }
 
 export type StudentQuizSummary = {
