@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole } from '@/lib/auth'
 import type { QuizSubmissionResult } from '@/lib/types'
+import { quizSchema } from '@/lib/quiz-validator'
 
 export type ActionState = {
   success?: boolean
@@ -21,7 +22,7 @@ export async function createQuizAction(formData: FormData): Promise<ActionState>
     const supabase = await createClient()
 
     const type = ((formData.get('type') as string)?.trim() || 'chapter') as 'chapter' | 'assessment'
-    const classId = (formData.get('class_id') as string)?.trim()
+    const classId = (formData.get('class_id') as string)?.trim() || null
     const subjectId = (formData.get('subject_id') as string)?.trim() || null
     const moduleId = (formData.get('module_id') as string)?.trim() || null
     const materialId = (formData.get('material_id') as string)?.trim() || null
@@ -38,51 +39,33 @@ export async function createQuizAction(formData: FormData): Promise<ActionState>
     const maxAttemptsRaw = (formData.get('max_attempts') as string)?.trim()
     const maxAttempts = maxAttemptsRaw ? parseInt(maxAttemptsRaw, 10) : null
 
-    if (!title) return { error: 'Judul kuis wajib diisi.' }
-    if (isNaN(passingScore) || passingScore < 0 || passingScore > 100) {
-      return { error: 'Nilai kelulusan (passing score) harus antara 0 dan 100.' }
-    }
-
-    if (type === 'assessment') {
-      if (!classId) return { error: 'Kelas wajib ditentukan untuk kuis penilaian.' }
-      if (!subjectId) return { error: 'Mata pelajaran wajib ditentukan untuk kuis penilaian.' }
-    } else {
-      if (!moduleId) return { error: 'Modul bab wajib ditentukan untuk kuis bab.' }
-    }
-
     const openAt = openAtRaw ? new Date(openAtRaw).toISOString() : null
     const dueAt = dueAtRaw ? new Date(dueAtRaw).toISOString() : null
     const closeAt = closeAtRaw ? new Date(closeAtRaw).toISOString() : null
 
-    if (openAt && dueAt && new Date(openAt) >= new Date(dueAt)) {
-      return { error: 'Waktu buka kuis harus lebih awal dari tenggat waktu (due date).' }
-    }
-    if (dueAt && closeAt && new Date(closeAt) < new Date(dueAt)) {
-      return { error: 'Batas akhir (tutup kuis) tidak boleh lebih awal dari tenggat waktu.' }
-    }
-    if (maxAttempts !== null && (isNaN(maxAttempts) || maxAttempts <= 0)) {
-      return { error: 'Batas percobaan (max attempts) harus berupa angka positif.' }
-    }
-
-    const insertPayload: Record<string, any> = {
+    const parsed = quizSchema.safeParse({
       type,
-      class_id: classId || null,
+      class_id: classId,
       subject_id: subjectId,
       module_id: moduleId,
       material_id: materialId,
       title,
       description,
-      passing_score: passingScore,
-      shuffle_questions: shuffleQuestions,
-      shuffle_options: shuffleOptions,
+      passing_score: isNaN(passingScore) ? 70 : passingScore,
       open_at: openAt,
       due_at: dueAt,
       close_at: closeAt,
       allow_late: allowLate,
       max_attempts: maxAttempts,
+      shuffle_questions: shuffleQuestions,
+      shuffle_options: shuffleOptions,
+    })
+
+    if (!parsed.success) {
+      return { error: parsed.error.issues[0]?.message || 'Data kuis tidak valid.' }
     }
 
-    const { error } = await supabase.from('quizzes').insert(insertPayload)
+    const { error } = await supabase.from('quizzes').insert(parsed.data)
 
     if (error) return { error: error.message }
 

@@ -28,7 +28,10 @@ import {
   Shuffle,
   Trash2,
   Video,
+  Clock,
+  Calendar,
 } from 'lucide-react'
+import { formatDateTimeId } from '@/lib/assignment-utils'
 import { SimulationManagerModal } from '@/components/teacher/simulation-manager-modal'
 import type { SimulationItem } from '@/lib/types'
 import {
@@ -64,10 +67,18 @@ type QuestionData = {
 
 type QuizData = {
   id: string
-  module_id: string
+  module_id?: string | null
+  class_id?: string | null
+  subject_id?: string | null
+  type?: 'chapter' | 'assessment'
   title: string
   description?: string | null
   passing_score: number
+  open_at?: string | null
+  due_at?: string | null
+  close_at?: string | null
+  allow_late?: boolean
+  max_attempts?: number | null
   order_index: number
   created_at?: string
   shuffle_questions?: boolean
@@ -145,9 +156,15 @@ export function ModulesManager({
   const [quizModuleTarget, setQuizModuleTarget] = useState<ModuleData | null>(null)
   const [editQuizTarget, setEditQuizTarget] = useState<QuizData | null>(null)
   const [deleteQuizTarget, setDeleteQuizTarget] = useState<QuizData | null>(null)
+  const [quizType, setQuizType] = useState<'chapter' | 'assessment'>('chapter')
   const [quizTitle, setQuizTitle] = useState('')
   const [quizDesc, setQuizDesc] = useState('')
   const [passingScore, setPassingScore] = useState('70')
+  const [quizOpenAt, setQuizOpenAt] = useState('')
+  const [quizDueAt, setQuizDueAt] = useState('')
+  const [quizCloseAt, setQuizCloseAt] = useState('')
+  const [quizAllowLate, setQuizAllowLate] = useState(false)
+  const [quizMaxAttempts, setQuizMaxAttempts] = useState('1')
   const [shuffleQuestions, setShuffleQuestions] = useState(false)
   const [shuffleOptions, setShuffleOptions] = useState(false)
 
@@ -304,14 +321,41 @@ export function ModulesManager({
   }
 
   // ====================================================================
-  // KUIS HANDLERS
+  // KUIS HANDLERS & HELPERS
   // ====================================================================
+  function getDefaultDueAtWib(): string {
+    const now = new Date()
+    const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000)
+    const yyyy = tomorrow.getFullYear()
+    const mm = String(tomorrow.getMonth() + 1).padStart(2, '0')
+    const dd = String(tomorrow.getDate()).padStart(2, '0')
+    return `${yyyy}-${mm}-${dd}T23:59`
+  }
+
+  function formatDateTimeForInput(iso?: string | null): string {
+    if (!iso) return ''
+    const d = new Date(iso)
+    if (isNaN(d.getTime())) return ''
+    const yyyy = d.getFullYear()
+    const mm = String(d.getMonth() + 1).padStart(2, '0')
+    const dd = String(d.getDate()).padStart(2, '0')
+    const hh = String(d.getHours()).padStart(2, '0')
+    const min = String(d.getMinutes()).padStart(2, '0')
+    return `${yyyy}-${mm}-${dd}T${hh}:${min}`
+  }
+
   function openAddQuiz(m: ModuleData) {
     setQuizModuleTarget(m)
     setEditQuizTarget(null)
+    setQuizType('chapter')
     setQuizTitle('')
     setQuizDesc('')
     setPassingScore('70')
+    setQuizOpenAt('')
+    setQuizDueAt(getDefaultDueAtWib())
+    setQuizCloseAt('')
+    setQuizAllowLate(false)
+    setQuizMaxAttempts('1')
     setShuffleQuestions(false)
     setShuffleOptions(false)
     setError(null)
@@ -321,9 +365,15 @@ export function ModulesManager({
   function openEditQuiz(m: ModuleData, qz: QuizData) {
     setQuizModuleTarget(m)
     setEditQuizTarget(qz)
+    setQuizType(qz.type ?? 'chapter')
     setQuizTitle(qz.title)
     setQuizDesc(qz.description || '')
     setPassingScore(String(qz.passing_score))
+    setQuizOpenAt(formatDateTimeForInput(qz.open_at))
+    setQuizDueAt(formatDateTimeForInput(qz.due_at) || (qz.type === 'assessment' ? getDefaultDueAtWib() : ''))
+    setQuizCloseAt(formatDateTimeForInput(qz.close_at))
+    setQuizAllowLate(qz.allow_late ?? false)
+    setQuizMaxAttempts(qz.max_attempts ? String(qz.max_attempts) : '1')
     setShuffleQuestions(qz.shuffle_questions ?? false)
     setShuffleOptions(qz.shuffle_options ?? false)
     setError(null)
@@ -337,14 +387,45 @@ export function ModulesManager({
     setLoading(true)
     setError(null)
 
+    // Validasi Tanggal / Zod di klien
+    if (quizType === 'assessment') {
+      if (!quizDueAt) {
+        setLoading(false)
+        setError('Tenggat waktu (due date) wajib diisi untuk kuis penilaian.')
+        return
+      }
+      if (quizOpenAt && new Date(quizOpenAt) >= new Date(quizDueAt)) {
+        setLoading(false)
+        setError('Waktu buka kuis harus lebih awal dari tenggat waktu (due date).')
+        return
+      }
+      if (quizCloseAt && new Date(quizCloseAt) < new Date(quizDueAt)) {
+        setLoading(false)
+        setError('Batas akhir (tutup kuis) tidak boleh lebih awal dari tenggat waktu.')
+        return
+      }
+    }
+
     const formData = new FormData()
+    formData.append('type', quizType)
     formData.append('class_id', classId)
+    formData.append('subject_id', quizModuleTarget.subject_id)
     formData.append('module_id', quizModuleTarget.id)
     formData.append('title', quizTitle)
     formData.append('description', quizDesc)
     formData.append('passing_score', passingScore)
     formData.append('shuffle_questions', String(shuffleQuestions))
     formData.append('shuffle_options', String(shuffleOptions))
+
+    if (quizType === 'chapter') {
+      if (quizDueAt) formData.append('due_at', quizDueAt)
+    } else {
+      if (quizOpenAt) formData.append('open_at', quizOpenAt)
+      if (quizDueAt) formData.append('due_at', quizDueAt)
+      if (quizCloseAt) formData.append('close_at', quizCloseAt)
+      formData.append('allow_late', String(quizAllowLate))
+      if (quizMaxAttempts) formData.append('max_attempts', quizMaxAttempts)
+    }
 
     const res = editQuizTarget
       ? await updateQuizAction(editQuizTarget.id, classId, formData)
@@ -718,14 +799,35 @@ export function ModulesManager({
                         >
                           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                             <div>
-                              <div className="flex items-center gap-2">
+                              <div className="flex flex-wrap items-center gap-2">
                                 <span className="font-semibold text-sm text-foreground">{qz.title}</span>
+                                <Badge
+                                  variant={qz.type === 'assessment' ? 'default' : 'secondary'}
+                                  className={`text-[10px] ${
+                                    qz.type === 'assessment' ? 'bg-purple-600 hover:bg-purple-700 text-white' : ''
+                                  }`}
+                                >
+                                  {qz.type === 'assessment' ? 'Kuis Penilaian' : 'Kuis Bab'}
+                                </Badge>
                                 <Badge variant="secondary" className="text-xs font-mono">
                                   KKM: {qz.passing_score}%
                                 </Badge>
                                 <Badge variant="outline" className="text-xs">
                                   {qz.questions?.length || 0} Soal
                                 </Badge>
+                                {qz.due_at && (
+                                  <Badge variant="outline" className="text-[10px] gap-1 text-muted-foreground">
+                                    <Clock className="h-2.5 w-2.5" />
+                                    {qz.type === 'assessment'
+                                      ? `Tenggat: ${formatDateTimeId(qz.due_at)}`
+                                      : `Target: ${formatDateTimeId(qz.due_at)}`}
+                                  </Badge>
+                                )}
+                                {qz.type === 'assessment' && qz.max_attempts && (
+                                  <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                                    Batas: {qz.max_attempts}x
+                                  </Badge>
+                                )}
                                 {qz.shuffle_questions && (
                                   <Badge variant="outline" className="text-[10px] gap-1 text-emerald-600 dark:text-emerald-400 border-emerald-500/30">
                                     <Shuffle className="h-2.5 w-2.5" /> Acak Soal
@@ -980,11 +1082,47 @@ export function ModulesManager({
         <form onSubmit={handleSaveQuiz} className="space-y-4">
           {error && <div className="rounded-md bg-destructive/10 p-3 text-xs text-destructive">{error}</div>}
 
+          {/* Pemilihan Jenis Kuis */}
+          <div className="space-y-2">
+            <Label>Jenis Kuis</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setQuizType('chapter')}
+                className={`p-3 rounded-lg border text-left transition-all ${
+                  quizType === 'chapter'
+                    ? 'border-primary bg-primary/10 text-primary ring-1 ring-primary'
+                    : 'border-border bg-background hover:bg-muted/50 text-muted-foreground'
+                }`}
+              >
+                <div className="text-xs font-semibold text-foreground">Kuis Bab</div>
+                <div className="text-[11px] text-muted-foreground mt-0.5">
+                  Prasyarat materi modul. Selalu menerima pengumpulan kapan saja.
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setQuizType('assessment')}
+                className={`p-3 rounded-lg border text-left transition-all ${
+                  quizType === 'assessment'
+                    ? 'border-purple-600 bg-purple-500/10 text-purple-700 dark:text-purple-300 ring-1 ring-purple-600'
+                    : 'border-border bg-background hover:bg-muted/50 text-muted-foreground'
+                }`}
+              >
+                <div className="text-xs font-semibold text-foreground">Kuis Penilaian</div>
+                <div className="text-[11px] text-muted-foreground mt-0.5">
+                  Ujian/evaluasi dengan batas waktu (open, due, close) & batas percobaan.
+                </div>
+              </button>
+            </div>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="quiz-title">Judul Kuis</Label>
             <Input
               id="quiz-title"
-              placeholder="Contoh: Kuis Uji Kompetensi Bab 1"
+              placeholder={quizType === 'assessment' ? 'Contoh: Ujian Tengah Semester (UTS)' : 'Contoh: Kuis Uji Kompetensi Bab 1'}
               value={quizTitle}
               onChange={(e) => setQuizTitle(e.target.value)}
               required
@@ -1004,9 +1142,125 @@ export function ModulesManager({
               required
             />
             <p className="text-xs text-muted-foreground">
-              Siswa wajib mencapai nilai ini agar dinyatakan lulus dan membuka materi bab selanjutnya.
+              {quizType === 'chapter'
+                ? 'Siswa wajib mencapai nilai ini agar dinyatakan lulus dan membuka materi bab selanjutnya.'
+                : 'Batas nilai minimum kriteria kelulusan (KKM) untuk kuis penilaian ini.'}
             </p>
           </div>
+
+          {/* Kolom Khusus Kuis Bab: Target Due Date Opsional */}
+          {quizType === 'chapter' && (
+            <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
+              <Label htmlFor="quiz-due-chapter" className="text-xs flex items-center gap-1.5">
+                <Calendar className="h-3.5 w-3.5 text-primary" />
+                Target Penyelesaian (Opsional, WIB)
+              </Label>
+              <Input
+                id="quiz-due-chapter"
+                type="datetime-local"
+                value={quizDueAt}
+                onChange={(e) => setQuizDueAt(e.target.value)}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Tampil di siswa sebagai rekomendasi target (&quot;disarankan selesai sebelum ...&quot;). Pengumpulan tetap diterima kapan saja.
+              </p>
+            </div>
+          )}
+
+          {/* Kolom Khusus Kuis Penilaian: Jadwal Waktu & Batas Percobaan */}
+          {quizType === 'assessment' && (
+            <div className="space-y-3.5 rounded-lg border border-purple-500/20 bg-purple-500/[0.03] p-3.5">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-purple-700 dark:text-purple-300">
+                <Clock className="h-4 w-4" />
+                <span>Pengaturan Waktu & Batas Pengerjaan (WIB)</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="quiz-open-at" className="text-xs">
+                    Waktu Dibuka (open_at, Opsional)
+                  </Label>
+                  <Input
+                    id="quiz-open-at"
+                    type="datetime-local"
+                    value={quizOpenAt}
+                    onChange={(e) => setQuizOpenAt(e.target.value)}
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    Sebelum waktu ini, butir soal dilindungi RLS dan tidak bisa dibaca siswa.
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="quiz-due-at" className="text-xs font-medium text-purple-700 dark:text-purple-300">
+                    Tenggat Waktu (due_at, Wajib) *
+                  </Label>
+                  <Input
+                    id="quiz-due-at"
+                    type="datetime-local"
+                    value={quizDueAt}
+                    onChange={(e) => setQuizDueAt(e.target.value)}
+                    required
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    Default tenggat pukul 23:59 WIB.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="quiz-close-at" className="text-xs">
+                    Batas Akhir Penutupan (close_at, Opsional)
+                  </Label>
+                  <Input
+                    id="quiz-close-at"
+                    type="datetime-local"
+                    value={quizCloseAt}
+                    onChange={(e) => setQuizCloseAt(e.target.value)}
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    Setelah waktu ini, kuis ditutup total dan pengumpulan otomatis ditolak.
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="quiz-max-attempts" className="text-xs">
+                    Batas Maksimal Percobaan (max_attempts)
+                  </Label>
+                  <Input
+                    id="quiz-max-attempts"
+                    type="number"
+                    min={1}
+                    value={quizMaxAttempts}
+                    onChange={(e) => setQuizMaxAttempts(e.target.value)}
+                    placeholder="1"
+                    required
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    Default 1 kali percobaan untuk kuis penilaian.
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-1 border-t border-purple-500/20">
+                <label className="flex items-start gap-2.5 text-xs cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={quizAllowLate}
+                    onChange={(e) => setQuizAllowLate(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-input text-purple-600 focus:ring-purple-600"
+                  />
+                  <div>
+                    <span className="font-medium text-foreground">Izinkan Pengumpulan Terlambat (Mode Fleksibel)</span>
+                    <p className="text-muted-foreground text-[11px] leading-relaxed">
+                      Bila dicentang, siswa masih bisa mengerjakan setelah tenggat waktu dengan tanda status terlambat (<code className="text-[10px]">is_late = true</code>). Bila tidak dicentang (mode ketat), pengumpulan ditolak setelah tenggat.
+                    </p>
+                  </div>
+                </label>
+              </div>
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="quiz-desc">Petunjuk Kuis (Opsional)</Label>
