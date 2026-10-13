@@ -197,6 +197,7 @@ export function sanitizeHtml(dirty?: string | null): string {
       'sup',
       'mark',
       'img',
+      'div',
     ],
     ALLOWED_ATTR: [
       'href',
@@ -210,6 +211,7 @@ export function sanitizeHtml(dirty?: string | null): string {
       'loading',
       'width',
       'height',
+      'data-callout-type',
     ],
   })
 }

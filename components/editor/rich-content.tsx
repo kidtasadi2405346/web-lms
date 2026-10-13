@@ -22,7 +22,12 @@ export const RICH_CONTENT_PROSE_CLASSES = `prose prose-neutral dark:prose-invert
   prose-th:border prose-th:border-border prose-th:p-2.5 prose-th:bg-muted/60 prose-th:text-left prose-th:font-semibold prose-th:text-xs
   prose-td:border prose-td:border-border prose-td:p-2.5 prose-td:text-xs
   [&_.is-editor-empty:first-child::before]:text-muted-foreground/60 [&_.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_.is-editor-empty:first-child::before]:float-left [&_.is-editor-empty:first-child::before]:pointer-events-none [&_.is-editor-empty:first-child::before]:h-0
-  prose-img:rounded-lg prose-img:my-4 prose-img:shadow-sm prose-img:max-w-full prose-img:h-auto [&_.image-align-left]:mr-auto [&_.image-align-center]:mx-auto [&_.image-align-right]:ml-auto [&_.image-size-small]:w-1/3 [&_.image-size-medium]:w-2/3 [&_.image-size-full]:w-full`
+  prose-img:rounded-lg prose-img:my-4 prose-img:shadow-sm prose-img:max-w-full prose-img:h-auto [&_.image-align-left]:mr-auto [&_.image-align-center]:mx-auto [&_.image-align-right]:ml-auto [&_.image-size-small]:w-1/3 [&_.image-size-medium]:w-2/3 [&_.image-size-full]:w-full
+  [&_.callout-box]:my-4 [&_.callout-box]:p-3.5 [&_.callout-box]:rounded-lg [&_.callout-box]:border-l-4 [&_.callout-box]:text-xs [&_.callout-box]:leading-relaxed
+  [&_.callout-catatan]:border-blue-500 [&_.callout-catatan]:bg-blue-500/10 [&_.callout-catatan]:text-blue-900 dark:[&_.callout-catatan]:text-blue-200
+  [&_.callout-penting]:border-amber-500 [&_.callout-penting]:bg-amber-500/10 [&_.callout-penting]:text-amber-900 dark:[&_.callout-penting]:text-amber-200
+  [&_.callout-k3lh]:border-red-600 [&_.callout-k3lh]:bg-red-600/10 [&_.callout-k3lh]:text-red-900 dark:[&_.callout-k3lh]:text-red-200
+  [&_.callout-tips]:border-emerald-600 [&_.callout-tips]:bg-emerald-600/10 [&_.callout-tips]:text-emerald-900 dark:[&_.callout-tips]:text-emerald-200`
 
 export function RichContent({ content, className = '' }: RichContentProps) {
   if (!content || !content.trim() || content === '<p></p>') {

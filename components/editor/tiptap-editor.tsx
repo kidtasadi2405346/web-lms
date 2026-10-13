@@ -16,6 +16,7 @@ import { TableRow } from '@tiptap/extension-table-row'
 import { TableCell } from '@tiptap/extension-table-cell'
 import { TableHeader } from '@tiptap/extension-table-header'
 import { Placeholder } from '@tiptap/extension-placeholder'
+import { Callout, CalloutType } from './callout-extension'
 import {
   Bold,
   Italic,
@@ -51,7 +52,13 @@ import {
   Eye,
   RemoveFormatting,
   RotateCcw,
+  AlertTriangle,
+  Info,
+  CheckCircle2,
+  ShieldAlert,
+  Sigma,
 } from 'lucide-react'
+import { renderKaTeX } from '@/lib/katex-safe'
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -88,6 +95,10 @@ export function TipTapEditor({
   const [showHighlightPicker, setShowHighlightPicker] = useState(false)
   const [showTableMenu, setShowTableMenu] = useState(false)
   const [showSymbolPicker, setShowSymbolPicker] = useState(false)
+  const [showCalloutMenu, setShowCalloutMenu] = useState(false)
+  const [isMathModalOpen, setIsMathModalOpen] = useState(false)
+  const [mathLatexInput, setMathLatexInput] = useState('')
+  const [isMathBlock, setIsMathBlock] = useState(false)
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
   const [hasDraft, setHasDraft] = useState(false)
   const [isDirty, setIsDirty] = useState(false)
@@ -96,6 +107,7 @@ export function TipTapEditor({
   const highlightPickerRef = useRef<HTMLDivElement>(null)
   const tableMenuRef = useRef<HTMLDivElement>(null)
   const symbolPickerRef = useRef<HTMLDivElement>(null)
+  const calloutMenuRef = useRef<HTMLDivElement>(null)
 
   // State untuk Upload Gambar
   const [isImageModalOpen, setIsImageModalOpen] = useState(false)
@@ -147,6 +159,9 @@ export function TipTapEditor({
       }
       if (symbolPickerRef.current && !symbolPickerRef.current.contains(event.target as Node)) {
         setShowSymbolPicker(false)
+      }
+      if (calloutMenuRef.current && !calloutMenuRef.current.contains(event.target as Node)) {
+        setShowCalloutMenu(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -214,6 +229,7 @@ export function TipTapEditor({
         emptyEditorClass: 'is-editor-empty',
       }),
       CustomImage,
+      Callout,
       Link.configure({
         openOnClick: false,
         HTMLAttributes: {
@@ -982,6 +998,100 @@ export function TipTapEditor({
           )}
         </div>
 
+        {/* Kotak Informasi / Callout (Catatan, Penting, K3LH, Tips) */}
+        <div className="relative inline-flex" ref={calloutMenuRef}>
+          <Button
+            type="button"
+            size="sm"
+            variant={editor.isActive('callout') ? 'secondary' : 'ghost'}
+            className="h-8 px-2 gap-1 text-xs"
+            onClick={() => {
+              setShowCalloutMenu((prev) => !prev)
+              setShowColorPicker(false)
+              setShowHighlightPicker(false)
+              setShowTableMenu(false)
+              setShowSymbolPicker(false)
+            }}
+            title="Kotak Informasi / Peringatan K3LH"
+            aria-label="Kotak Informasi"
+          >
+            <ShieldAlert className="h-4 w-4 text-amber-600" />
+            <span className="text-[11px] font-medium hidden sm:inline">Kotak Info</span>
+            <ChevronDown className="h-3 w-3 opacity-60" />
+          </Button>
+
+          {showCalloutMenu && (
+            <div className="absolute top-full left-0 mt-1 z-20 w-52 rounded-md border bg-popover p-2 shadow-md text-xs space-y-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start text-xs h-7 gap-1.5 text-blue-700 dark:text-blue-300 hover:bg-blue-500/10"
+                onClick={() => {
+                  editor.chain().focus().toggleCallout({ type: 'catatan' }).run()
+                  setShowCalloutMenu(false)
+                }}
+              >
+                <Info className="h-3.5 w-3.5 text-blue-500" /> Catatan Materi
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start text-xs h-7 gap-1.5 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10"
+                onClick={() => {
+                  editor.chain().focus().toggleCallout({ type: 'penting' }).run()
+                  setShowCalloutMenu(false)
+                }}
+              >
+                <AlertTriangle className="h-3.5 w-3.5 text-amber-500" /> Poin Penting
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start text-xs h-7 gap-1.5 text-red-700 dark:text-red-300 hover:bg-red-500/10"
+                onClick={() => {
+                  editor.chain().focus().toggleCallout({ type: 'k3lh' }).run()
+                  setShowCalloutMenu(false)
+                }}
+              >
+                <ShieldAlert className="h-3.5 w-3.5 text-red-600" /> Peringatan K3LH
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start text-xs h-7 gap-1.5 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10"
+                onClick={() => {
+                  editor.chain().focus().toggleCallout({ type: 'tips' }).run()
+                  setShowCalloutMenu(false)
+                }}
+              >
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> Tips Praktik
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* Rumus Matematika (KaTeX) */}
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-8 px-2 gap-1 text-xs"
+          onClick={() => {
+            setMathLatexInput('')
+            setIsMathBlock(false)
+            setIsMathModalOpen(true)
+          }}
+          title="Sisipkan Rumus Matematika / Fisika (KaTeX)"
+          aria-label="Rumus Matematika"
+        >
+          <Sigma className="h-4 w-4 text-purple-600" />
+          <span className="text-[11px] font-medium hidden sm:inline">Rumus</span>
+        </Button>
+
         {/* Sisipkan Gambar */}
         <Button
           type="button"
@@ -1230,6 +1340,111 @@ export function TipTapEditor({
               ) : (
                 'Simpan & Sisipkan'
               )}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal Dialog Sisipkan Rumus Matematika (KaTeX) */}
+      <Modal
+        isOpen={isMathModalOpen}
+        onClose={() => setIsMathModalOpen(false)}
+        title="Sisipkan Rumus Matematika / Fisika"
+        description="Gunakan notasi LaTeX untuk merender rumus teknik elektro, daya, dan kalkulasi listrik."
+        maxWidth="md"
+      >
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="math-latex" className="text-xs font-semibold">
+              Ekspresi LaTeX
+            </Label>
+            <Input
+              id="math-latex"
+              placeholder="Contoh: V = I \times R atau P = V \cdot I"
+              value={mathLatexInput}
+              onChange={(e) => setMathLatexInput(e.target.value)}
+              className="font-mono text-xs"
+            />
+          </div>
+
+          {/* Contoh Template Rumus Cepat */}
+          <div className="space-y-1">
+            <span className="text-[11px] text-muted-foreground block">Template Rumus Elektro Cepat:</span>
+            <div className="flex flex-wrap gap-1">
+              <button
+                type="button"
+                onClick={() => setMathLatexInput('V = I \\times R')}
+                className="rounded border bg-muted/50 px-2 py-0.5 text-[11px] font-mono hover:bg-muted"
+              >
+                Hukum Ohm (V = I × R)
+              </button>
+              <button
+                type="button"
+                onClick={() => setMathLatexInput('P = V \\times I')}
+                className="rounded border bg-muted/50 px-2 py-0.5 text-[11px] font-mono hover:bg-muted"
+              >
+                Daya Listrik (P = V × I)
+              </button>
+              <button
+                type="button"
+                onClick={() => setMathLatexInput('\\frac{1}{R_{tot}} = \\frac{1}{R_1} + \\frac{1}{R_2}')}
+                className="rounded border bg-muted/50 px-2 py-0.5 text-[11px] font-mono hover:bg-muted"
+              >
+                Resistor Paralel
+              </button>
+              <button
+                type="button"
+                onClick={() => setMathLatexInput('E = P \\times t')}
+                className="rounded border bg-muted/50 px-2 py-0.5 text-[11px] font-mono hover:bg-muted"
+              >
+                Energi Listrik
+              </button>
+            </div>
+          </div>
+
+          {/* Opsi Tampilan Blok vs Inline */}
+          <div className="flex items-center gap-2">
+            <input
+              id="math-block"
+              type="checkbox"
+              checked={isMathBlock}
+              onChange={(e) => setIsMathBlock(e.target.checked)}
+              className="h-3.5 w-3.5 rounded border-gray-300 text-primary focus:ring-primary"
+            />
+            <label htmlFor="math-block" className="text-xs text-muted-foreground cursor-pointer">
+              Tampilkan sebagai blok terpisah di tengah baris (Display Block)
+            </label>
+          </div>
+
+          {/* Pratinjau Langsung KaTeX */}
+          {mathLatexInput.trim() && (
+            <div className="rounded-lg border bg-muted/30 p-3 text-center overflow-x-auto">
+              <span className="text-[10px] text-muted-foreground block mb-1">Pratinjau Rumus:</span>
+              <div
+                dangerouslySetInnerHTML={{
+                  __html: renderKaTeX(mathLatexInput, isMathBlock),
+                }}
+              />
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 pt-2 border-t">
+            <Button type="button" variant="outline" size="sm" onClick={() => setIsMathModalOpen(false)}>
+              Batal
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={!mathLatexInput.trim()}
+              onClick={() => {
+                if (!mathLatexInput.trim()) return
+                const renderedHtml = renderKaTeX(mathLatexInput.trim(), isMathBlock)
+                editor.chain().focus().insertContent(renderedHtml).run()
+                setIsMathModalOpen(false)
+                setMathLatexInput('')
+              }}
+            >
+              Sisipkan Rumus
             </Button>
           </div>
         </div>
