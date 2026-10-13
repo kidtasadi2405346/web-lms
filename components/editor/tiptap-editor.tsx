@@ -20,6 +20,7 @@ import {
   Link2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { RICH_CONTENT_PROSE_CLASSES } from './rich-content'
 
 interface TipTapEditorProps {
   value?: string
@@ -47,8 +48,7 @@ export function TipTapEditor({ value = '', onChange, placeholder = 'Tulis isi ma
     immediatelyRender: false,
     editorProps: {
       attributes: {
-        class:
-          'min-h-[220px] w-full rounded-b-md px-3 py-3 text-sm focus:outline-none leading-relaxed prose prose-neutral dark:prose-invert max-w-none',
+        class: `min-h-[220px] w-full rounded-b-md px-3 py-3 focus:outline-none ${RICH_CONTENT_PROSE_CLASSES}`,
       },
     },
     onUpdate: ({ editor }) => {

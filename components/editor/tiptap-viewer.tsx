@@ -1,6 +1,7 @@
 'use client'
 
 import { sanitizeHtml } from '@/lib/sanitize'
+import { RichContent } from './rich-content'
 
 interface TipTapViewerProps {
   content?: string | null
@@ -14,10 +15,5 @@ export function TipTapViewer({ content, className = '' }: TipTapViewerProps) {
 
   const cleanHtml = sanitizeHtml(content)
 
-  return (
-    <div
-      className={`prose prose-neutral dark:prose-invert max-w-none text-sm leading-relaxed ${className}`}
-      dangerouslySetInnerHTML={{ __html: cleanHtml }}
-    />
-  )
+  return <RichContent content={cleanHtml} className={className} />
 }
