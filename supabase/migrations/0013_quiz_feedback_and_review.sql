@@ -6,7 +6,9 @@
 alter table public.quizzes
   add column if not exists feedback_mode text,
   add column if not exists review_at timestamptz,
-  add column if not exists sound_effects boolean default false;
+  add column if not exists sound_effects boolean default false,
+  add column if not exists shuffle_questions boolean default false,
+  add column if not exists shuffle_options boolean default false;
 
 update public.quizzes
 set feedback_mode = coalesce(feedback_mode, 'none')
@@ -16,7 +18,11 @@ alter table public.quizzes
   alter column feedback_mode set default 'none',
   alter column feedback_mode set not null,
   alter column sound_effects set default false,
-  alter column sound_effects set not null;
+  alter column sound_effects set not null,
+  alter column shuffle_questions set default false,
+  alter column shuffle_questions set not null,
+  alter column shuffle_options set default false,
+  alter column shuffle_options set not null;
 
 alter table public.quizzes drop constraint if exists quizzes_feedback_mode_check;
 alter table public.quizzes add constraint quizzes_feedback_mode_check
@@ -93,6 +99,7 @@ create policy quiz_attempt_answers_no_direct_write on public.quiz_attempt_answer
   with check (false);
 
 -- 5. Fungsi internal bersama untuk finalisasi hasil
+drop function if exists public._finalize_attempt(uuid);
 create or replace function public._finalize_attempt(p_attempt_id uuid)
 returns jsonb
 language plpgsql
@@ -185,7 +192,11 @@ begin
 end;
 $$;
 
+revoke all on function public._finalize_attempt(uuid) from public, anon, authenticated;
+
 -- 6. submit_quiz yang kompatibel dengan kuis lama, tetapi melarang mode per_question
+drop function if exists public.submit_quiz(uuid, jsonb);
+drop function if exists public.submit_quiz(uuid, json);
 create or replace function public.submit_quiz(
   p_quiz_id uuid,
   p_answers jsonb
@@ -199,6 +210,7 @@ declare
   v_student_id uuid;
   v_role text;
   v_quiz record;
+  v_material_id uuid;
   v_total_questions integer := 0;
   v_correct_count integer := 0;
   v_score numeric(5,2) := 0;
@@ -235,6 +247,22 @@ begin
 
   if v_quiz.feedback_mode = 'per_question' then
     raise exception 'Kuis ini memakai mode per soal. Gunakan mulai kuis dan jawab satu soal per satu.';
+  end if;
+
+  if v_quiz.type = 'chapter' then
+    if v_quiz.material_id is not null then
+      v_material_id := v_quiz.material_id;
+    elsif v_quiz.module_id is not null then
+      select m.id into v_material_id
+      from public.materials m
+      where m.module_id = v_quiz.module_id
+      order by m.order_index
+      limit 1;
+    end if;
+
+    if v_material_id is not null and v_role = 'student' and not public.can_access_material(v_material_id) then
+      raise exception 'Kuis bab belum dibuka untuk Anda';
+    end if;
   end if;
 
   if v_role = 'student' and not exists (
@@ -323,6 +351,7 @@ revoke all on function public.submit_quiz(uuid, jsonb) from public, anon;
 grant execute on function public.submit_quiz(uuid, jsonb) to authenticated;
 
 -- 7. start_quiz untuk mode per_question
+drop function if exists public.start_quiz(uuid);
 create or replace function public.start_quiz(p_quiz_id uuid)
 returns jsonb
 language plpgsql
@@ -332,6 +361,7 @@ as $$
 declare
   v_student_id uuid := auth.uid();
   v_quiz record;
+  v_material_id uuid;
   v_existing record;
   v_attempt_count integer;
   v_now timestamptz := now();
@@ -354,6 +384,22 @@ begin
     raise exception 'Kuis ini tidak memakai mode per soal.';
   end if;
 
+  if v_quiz.type = 'chapter' then
+    if v_quiz.material_id is not null then
+      v_material_id := v_quiz.material_id;
+    elsif v_quiz.module_id is not null then
+      select m.id into v_material_id
+      from public.materials m
+      where m.module_id = v_quiz.module_id
+      order by m.order_index
+      limit 1;
+    end if;
+
+    if v_material_id is not null and not public.can_access_material(v_material_id) then
+      raise exception 'Kuis bab belum dibuka untuk Anda';
+    end if;
+  end if;
+
   if not exists (
     select 1 from public.enrollments e
     where e.student_id = v_student_id and e.class_id = coalesce(v_quiz.class_id, v_quiz.resolved_class_id)
@@ -364,6 +410,9 @@ begin
   if v_quiz.type = 'assessment' then
     if v_quiz.open_at is not null and v_now < v_quiz.open_at then
       raise exception 'Kuis penilaian belum dibuka';
+    end if;
+    if not v_quiz.allow_late and v_quiz.due_at is not null and v_now > v_quiz.due_at then
+      raise exception 'Batas waktu pengerjaan kuis penilaian telah berakhir';
     end if;
     if v_quiz.close_at is not null and v_now > v_quiz.close_at then
       raise exception 'Batas akhir pengerjaan kuis penilaian telah ditutup';
@@ -399,6 +448,7 @@ revoke all on function public.start_quiz(uuid) from public, anon;
 grant execute on function public.start_quiz(uuid) to authenticated;
 
 -- 8. answer_question: menyimpan hasil soal per soal
+drop function if exists public.answer_question(uuid, uuid, text);
 create or replace function public.answer_question(p_attempt_id uuid, p_question_id uuid, p_answer text)
 returns jsonb
 language plpgsql
@@ -471,6 +521,7 @@ revoke all on function public.answer_question(uuid, uuid, text) from public, ano
 grant execute on function public.answer_question(uuid, uuid, text) to authenticated;
 
 -- 9. finish_quiz: wajib semua soal terjawab dan finalisasi hasil
+drop function if exists public.finish_quiz(uuid);
 create or replace function public.finish_quiz(p_attempt_id uuid)
 returns jsonb
 language plpgsql
@@ -514,6 +565,7 @@ revoke all on function public.finish_quiz(uuid) from public, anon;
 grant execute on function public.finish_quiz(uuid) to authenticated;
 
 -- 10. review untuk siswa setelah waktu dibuka
+drop function if exists public.get_attempt_review(uuid);
 create or replace function public.get_attempt_review(p_attempt_id uuid)
 returns jsonb
 language plpgsql
@@ -522,7 +574,6 @@ set search_path = public
 as $$
 declare
   v_attempt record;
-  v_quiz record;
   v_rows jsonb;
 begin
   select a.*, q.feedback_mode, q.review_at, q.type
@@ -548,7 +599,7 @@ begin
   end if;
 
   if v_attempt.review_at is not null and now() < v_attempt.review_at then
-    raise exception 'Pembahasan akan dibuka pada ' || to_char(v_attempt.review_at at time zone 'UTC', 'YYYY-MM-DD HH24:MI:SS');
+    raise exception 'Pembahasan akan dibuka pada % WIB', to_char(v_attempt.review_at at time zone 'Asia/Jakarta', 'YYYY-MM-DD HH24:MI');
   end if;
 
   select jsonb_agg(item) into v_rows

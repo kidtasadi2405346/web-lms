@@ -1,85 +1,116 @@
-import { z } from 'zod'
+import { z } from "zod";
+
+export const questionExplanationSchema = z
+  .string()
+  .max(1000, "Alasan jawaban maksimal 1.000 karakter.")
+  .nullable();
 
 export const quizSchema = z
   .object({
-    type: z.enum(['chapter', 'assessment']).default('chapter'),
+    type: z.enum(["chapter", "assessment"]).default("chapter"),
     class_id: z.string().uuid().nullable().optional(),
     subject_id: z.string().uuid().nullable().optional(),
     module_id: z.string().uuid().nullable().optional(),
     material_id: z.string().uuid().nullable().optional(),
-    title: z.string().min(1, 'Judul kuis wajib diisi'),
+    title: z.string().min(1, "Judul kuis wajib diisi"),
     description: z.string().nullable().optional(),
-    passing_score: z.number().min(0).max(100, 'Nilai kelulusan harus antara 0 dan 100'),
-    feedback_mode: z.enum(['none', 'after_submit', 'per_question']).default('none'),
+    passing_score: z
+      .number()
+      .min(0)
+      .max(100, "Nilai kelulusan harus antara 0 dan 100"),
+    feedback_mode: z
+      .enum(["none", "after_submit", "per_question"])
+      .default("none"),
     review_at: z.string().datetime({ offset: true }).nullable().optional(),
     sound_effects: z.boolean().default(false),
     open_at: z.string().datetime({ offset: true }).nullable().optional(),
     due_at: z.string().datetime({ offset: true }).nullable().optional(),
     close_at: z.string().datetime({ offset: true }).nullable().optional(),
     allow_late: z.boolean().default(false),
-    max_attempts: z.number().int().positive('Batas percobaan harus berupa bilangan bulat positif').nullable().optional(),
+    max_attempts: z
+      .number()
+      .int()
+      .positive("Batas percobaan harus berupa bilangan bulat positif")
+      .nullable()
+      .optional(),
     shuffle_questions: z.boolean().default(false),
     shuffle_options: z.boolean().default(false),
   })
   .refine(
     (data) => {
-      if (data.type === 'chapter') {
-        return Boolean(data.module_id || data.material_id)
+      if (data.type === "chapter") {
+        return Boolean(data.module_id || data.material_id);
       }
-      return Boolean(data.class_id && data.subject_id)
+      return Boolean(data.class_id && data.subject_id);
     },
     {
-      message: 'Kuis bab wajib terhubung ke modul/materi, sedangkan kuis penilaian wajib memiliki kelas dan mata pelajaran.',
-      path: ['type'],
-    }
+      message:
+        "Kuis bab wajib terhubung ke modul/materi, sedangkan kuis penilaian wajib memiliki kelas dan mata pelajaran.",
+      path: ["type"],
+    },
   )
   .refine(
     (data) => {
-      if (data.type === 'assessment' && data.feedback_mode === 'per_question') {
-        return false
+      if (data.type === "assessment" && data.feedback_mode === "per_question") {
+        return false;
       }
-      return true
+      return true;
     },
     {
-      message: 'Kuis penilaian tidak dapat menggunakan mode "langsung per soal".',
-      path: ['feedback_mode'],
-    }
+      message:
+        'Kuis penilaian tidak dapat menggunakan mode "langsung per soal".',
+      path: ["feedback_mode"],
+    },
+  )
+  .refine(
+    (data) => {
+      if (!data.review_at) return true;
+      return data.type === "assessment" && data.feedback_mode !== "none";
+    },
+    {
+      message:
+        "Pembahasan dibuka pada hanya berlaku untuk kuis penilaian yang menyediakan pembahasan.",
+      path: ["review_at"],
+    },
   )
   .refine(
     (data) => {
       if (data.open_at && data.review_at) {
-        return new Date(data.review_at) >= new Date(data.open_at)
+        return new Date(data.review_at) >= new Date(data.open_at);
       }
-      return true
+      return true;
     },
     {
-      message: 'Pembahasan dibuka pada (review_at) tidak boleh sebelum waktu buka kuis (open_at).',
-      path: ['review_at'],
-    }
+      message:
+        "Pembahasan dibuka pada (review_at) tidak boleh sebelum waktu buka kuis (open_at).",
+      path: ["review_at"],
+    },
   )
   .refine(
     (data) => {
       if (data.open_at && data.due_at) {
-        return new Date(data.open_at) < new Date(data.due_at)
+        return new Date(data.open_at) < new Date(data.due_at);
       }
-      return true
+      return true;
     },
     {
-      message: 'Waktu buka kuis (open_at) harus lebih awal dari tenggat waktu (due_at).',
-      path: ['open_at'],
-    }
+      message:
+        "Waktu buka kuis (open_at) harus lebih awal dari tenggat waktu (due_at).",
+      path: ["open_at"],
+    },
   )
   .refine(
     (data) => {
       if (data.due_at && data.close_at) {
-        return new Date(data.close_at) >= new Date(data.due_at)
+        return new Date(data.close_at) >= new Date(data.due_at);
       }
-      return true
+      return true;
     },
     {
-      message: 'Batas penutupan kuis (close_at) tidak boleh lebih awal dari tenggat waktu (due_at).',
-      path: ['close_at'],
-    }
-  )
+      message:
+        "Batas penutupan kuis (close_at) tidak boleh lebih awal dari tenggat waktu (due_at).",
+      path: ["close_at"],
+    },
+  );
 
-export type QuizFormValues = z.infer<typeof quizSchema>
+export type QuizFormValues = z.infer<typeof quizSchema>;

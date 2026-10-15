@@ -1,4 +1,4 @@
-# Mini LMS — Tahap 1: Fondasi
+# EduSpace — Tahap 1: Fondasi
 
 Next.js (App Router, TS strict) + Tailwind + shadcn/ui + Supabase.
 

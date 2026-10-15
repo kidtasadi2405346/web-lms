@@ -130,7 +130,7 @@ export function TipTapEditor({
       if (savedDraft && savedDraft !== value && savedDraft.trim() !== '<p></p>') {
         setHasDraft(true)
       }
-    } catch {}
+    } catch { }
   }, [draftStorageKey, value])
 
   // Peringatan sebelum menutup browser/tab bila ada perubahan yang belum disimpan
@@ -241,7 +241,8 @@ export function TipTapEditor({
     immediatelyRender: false,
     editorProps: {
       attributes: {
-        class: `min-h-[260px] w-full rounded-b-md px-3 py-3 focus:outline-none ${RICH_CONTENT_PROSE_CLASSES}`,
+        // Tambahkan fungsi replace dan trim di akhir string untuk membersihkan karakter enter/spasi berlebih
+        class: `min-h-[260px] w-full rounded-b-md px-3 py-3 focus:outline-none ${RICH_CONTENT_PROSE_CLASSES}`.replace(/\s+/g, ' ').trim(),
       },
       handleDrop: (view, event) => {
         const hasFiles = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files.length > 0
@@ -281,7 +282,7 @@ export function TipTapEditor({
       // Simpan draf otomatis ke localStorage
       try {
         localStorage.setItem(draftStorageKey, html)
-      } catch {}
+      } catch { }
     },
   })
 
@@ -320,7 +321,7 @@ export function TipTapEditor({
         onChange?.(savedDraft)
         setHasDraft(false)
       }
-    } catch {}
+    } catch { }
   }
 
   // Buang draf
@@ -328,7 +329,7 @@ export function TipTapEditor({
     try {
       localStorage.removeItem(draftStorageKey)
       setHasDraft(false)
-    } catch {}
+    } catch { }
   }
 
   // Hapus semua format formatting pada teks terpilih

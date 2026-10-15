@@ -4,7 +4,7 @@ import './globals.css'
 import 'katex/dist/katex.min.css'
 
 export const metadata: Metadata = {
-  title: 'Mini LMS',
+  title: 'EduSpace',
   description: 'Pembelajaran daring untuk sekolah',
 }
 
