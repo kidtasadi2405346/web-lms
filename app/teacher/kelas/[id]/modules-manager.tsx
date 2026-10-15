@@ -1235,7 +1235,6 @@ export function ModulesManager({
                     onChange={(event) => setAudioTitle(event.target.value)}
                     maxLength={160}
                     placeholder="Contoh: Penjelasan Hukum Newton"
-                    required
                   />
                 </div>
 
