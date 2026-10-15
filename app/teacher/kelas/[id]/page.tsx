@@ -73,6 +73,16 @@ export default async function TeacherClassModulesPage({ params, searchParams }: 
           config,
           order_index,
           created_at
+        ),
+        material_audios (
+          id,
+          material_id,
+          title,
+          file_path,
+          duration_seconds,
+          transcript,
+          order_index,
+          created_at
         )
       ),
       quizzes (
@@ -124,6 +134,7 @@ export default async function TeacherClassModulesPage({ params, searchParams }: 
       .map((mat: any) => ({
         ...mat,
         simulations: (mat.simulations ?? []).sort((a: any, b: any) => a.order_index - b.order_index),
+        material_audios: (mat.material_audios ?? []).sort((a: any, b: any) => a.order_index - b.order_index),
       })),
     quizzes: (m.quizzes ?? []).map((qz: any) => ({
       id: qz.id,

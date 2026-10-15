@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -14,6 +14,8 @@ import { TipTapViewer } from '@/components/editor/tiptap-viewer'
 import { VideoEmbed } from '@/components/media/video-embed'
 import {
   ArrowLeft,
+  ArrowDown,
+  ArrowUp,
   CheckCircle2,
   Cpu,
   Edit2,
@@ -27,6 +29,8 @@ import {
   Plus,
   Shuffle,
   Trash2,
+  Upload,
+  Music2,
   Video,
   Clock,
   Calendar,
@@ -41,7 +45,17 @@ import {
   createMaterialAction,
   updateMaterialAction,
   deleteMaterialAction,
+  createMaterialAudioAction,
+  deleteMaterialAudioAction,
+  reorderMaterialAudioAction,
 } from '@/lib/actions/teacher'
+import {
+  getMaterialAudioExtension,
+  readMaterialAudioDuration,
+  uploadMaterialAudioFile,
+  validateMaterialAudioFile,
+} from '@/lib/material-audio-upload'
+import { createClient as createBrowserSupabaseClient } from '@/lib/supabase/client'
 import {
   createQuizAction,
   updateQuizAction,
@@ -95,6 +109,17 @@ type MaterialData = {
   order_index: number
   created_at?: string
   simulations?: SimulationItem[]
+  material_audios?: MaterialAudioData[]
+}
+
+type MaterialAudioData = {
+  id: string
+  material_id: string
+  title: string
+  file_path: string
+  duration_seconds: number | null
+  transcript: string | null
+  order_index: number
 }
 
 type ModuleData = {
@@ -150,6 +175,14 @@ export function ModulesManager({
   const [matTitle, setMatTitle] = useState('')
   const [matVideoUrl, setMatVideoUrl] = useState('')
   const [matContent, setMatContent] = useState('')
+  const [materialAudios, setMaterialAudios] = useState<MaterialAudioData[]>([])
+  const [audioTitle, setAudioTitle] = useState('')
+  const [audioTranscript, setAudioTranscript] = useState('')
+  const [audioFile, setAudioFile] = useState<File | null>(null)
+  const [audioUploadProgress, setAudioUploadProgress] = useState<number | null>(null)
+  const [audioSuccess, setAudioSuccess] = useState<string | null>(null)
+  const [materialNeedsReload, setMaterialNeedsReload] = useState(false)
+  const audioFileInput = useRef<HTMLInputElement>(null)
 
   // Quiz modal states
   const [isQuizModalOpen, setIsQuizModalOpen] = useState(false)
@@ -262,6 +295,12 @@ export function ModulesManager({
     setMatTitle('')
     setMatVideoUrl('')
     setMatContent('')
+    setMaterialAudios([])
+    setAudioTitle('')
+    setAudioTranscript('')
+    setAudioFile(null)
+    setAudioSuccess(null)
+    setMaterialNeedsReload(false)
     setError(null)
     setIsMaterialModalOpen(true)
   }
@@ -272,6 +311,12 @@ export function ModulesManager({
     setMatTitle(mat.title)
     setMatVideoUrl(mat.video_url || '')
     setMatContent(mat.content || '')
+    setMaterialAudios([...(mat.material_audios ?? [])].sort((a, b) => a.order_index - b.order_index))
+    setAudioTitle('')
+    setAudioTranscript('')
+    setAudioFile(null)
+    setAudioSuccess(null)
+    setMaterialNeedsReload(false)
     setError(null)
     setIsMaterialModalOpen(true)
   }
@@ -290,6 +335,7 @@ export function ModulesManager({
     formData.append('video_url', matVideoUrl)
     formData.append('content', matContent)
 
+    const isNewMaterial = !editMaterialTarget
     const res = editMaterialTarget
       ? await updateMaterialAction(editMaterialTarget.id, classId, formData)
       : await createMaterialAction(formData)
@@ -300,8 +346,152 @@ export function ModulesManager({
       return
     }
 
+    if (isNewMaterial && res.materialId) {
+      setEditMaterialTarget({
+        id: res.materialId,
+        module_id: materialModuleTarget.id,
+        title: matTitle,
+        content: matContent,
+        video_url: matVideoUrl,
+        order_index: 0,
+        material_audios: [],
+      })
+      setMaterialAudios([])
+      setMaterialNeedsReload(true)
+      setAudioSuccess('Materi tersimpan. Audio pembelajaran kini dapat ditambahkan.')
+      return
+    }
+
+    setMaterialNeedsReload(true)
     setIsMaterialModalOpen(false)
     window.location.reload()
+  }
+
+  function closeMaterialEditor() {
+    setIsMaterialModalOpen(false)
+    if (materialNeedsReload) window.location.reload()
+  }
+
+  function handleAudioFileChange(file: File | null) {
+    setAudioSuccess(null)
+    if (!file) {
+      setAudioFile(null)
+      return
+    }
+    const validationError = validateMaterialAudioFile(file)
+    if (validationError) {
+      setAudioFile(null)
+      setError(validationError)
+      if (audioFileInput.current) audioFileInput.current.value = ''
+      return
+    }
+    setError(null)
+    setAudioFile(file)
+  }
+
+  async function handleUploadMaterialAudio() {
+    if (!editMaterialTarget) {
+      setError('Simpan materi dulu, lalu edit untuk menambah audio.')
+      return
+    }
+    if (!audioTitle.trim()) {
+      setError('Judul audio wajib diisi.')
+      return
+    }
+    if (!audioFile) {
+      setError('Pilih berkas audio terlebih dahulu.')
+      return
+    }
+    const validationError = validateMaterialAudioFile(audioFile)
+    if (validationError) {
+      setError(validationError)
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+    setAudioSuccess(null)
+    setAudioUploadProgress(0)
+    let filePath = ''
+    try {
+      const duration = await readMaterialAudioDuration(audioFile)
+      const extension = getMaterialAudioExtension(audioFile.type)
+      if (!extension) throw new Error('Format audio tidak didukung.')
+      filePath = `${editMaterialTarget.id}/${crypto.randomUUID()}.${extension}`
+      await uploadMaterialAudioFile(audioFile, filePath, setAudioUploadProgress)
+
+      const formData = new FormData()
+      formData.set('title', audioTitle)
+      formData.set('transcript', audioTranscript)
+      formData.set('file_path', filePath)
+      formData.set('file_type', audioFile.type)
+      formData.set('file_size', String(audioFile.size))
+      formData.set('duration_seconds', String(duration))
+      const result = await createMaterialAudioAction(editMaterialTarget.id, classId, formData)
+      if (result.error || !result.audioId) {
+        const supabase = createBrowserSupabaseClient()
+        await supabase.storage.from('material-audio').remove([filePath])
+        throw new Error(result.error || 'Data audio gagal disimpan.')
+      }
+
+      setMaterialAudios((current) => [...current, {
+        id: result.audioId!,
+        material_id: editMaterialTarget.id,
+        title: audioTitle.trim(),
+        file_path: filePath,
+        duration_seconds: duration,
+        transcript: audioTranscript.trim() || null,
+        order_index: current.length,
+      }])
+      setMaterialNeedsReload(true)
+      setAudioTitle('')
+      setAudioTranscript('')
+      setAudioFile(null)
+      if (audioFileInput.current) audioFileInput.current.value = ''
+      setAudioSuccess('Audio pembelajaran berhasil ditambahkan.')
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : 'Unggahan audio gagal.')
+    } finally {
+      setLoading(false)
+      setAudioUploadProgress(null)
+    }
+  }
+
+  async function handleMoveMaterialAudio(audioId: string, newIndex: number) {
+    if (!editMaterialTarget || newIndex < 0 || newIndex >= materialAudios.length) return
+    setLoading(true)
+    setError(null)
+    const result = await reorderMaterialAudioAction(audioId, editMaterialTarget.id, classId, newIndex)
+    setLoading(false)
+    if (result.error) {
+      setError(result.error)
+      return
+    }
+    setMaterialAudios((current) => {
+      const next = [...current]
+      const oldIndex = next.findIndex((audio) => audio.id === audioId)
+      if (oldIndex < 0) return current
+      const [audio] = next.splice(oldIndex, 1)
+      next.splice(newIndex, 0, audio!)
+      return next.map((item, index) => ({ ...item, order_index: index }))
+    })
+    setMaterialNeedsReload(true)
+  }
+
+  async function handleDeleteMaterialAudio(audio: MaterialAudioData) {
+    if (!editMaterialTarget) return
+    setLoading(true)
+    setError(null)
+    const result = await deleteMaterialAudioAction(audio.id, editMaterialTarget.id, classId)
+    setLoading(false)
+    if (result.error) {
+      setError(result.error)
+      return
+    }
+    setMaterialAudios((current) => current
+      .filter((item) => item.id !== audio.id)
+      .map((item, index) => ({ ...item, order_index: index })))
+    setMaterialNeedsReload(true)
   }
 
   async function handleDeleteMaterial() {
@@ -990,7 +1180,7 @@ export function ModulesManager({
       {/* ==================================================================== */}
       <Modal
         isOpen={isMaterialModalOpen}
-        onClose={() => setIsMaterialModalOpen(false)}
+        onClose={closeMaterialEditor}
         title={editMaterialTarget ? 'Ubah Materi Pembelajaran' : 'Tambah Materi Baru'}
         description={`Modul: ${materialModuleTarget?.title || ''}`}
         maxWidth="2xl"
@@ -1025,6 +1215,143 @@ export function ModulesManager({
             )}
           </div>
 
+          <section className="space-y-3 rounded-md border p-4" aria-labelledby="material-audio-heading">
+            <div className="flex items-center gap-2">
+              <Music2 className="h-4 w-4 text-primary" aria-hidden="true" />
+              <h3 id="material-audio-heading" className="text-sm font-semibold">Audio pembelajaran</h3>
+            </div>
+
+            {!editMaterialTarget ? (
+              <p className="text-xs text-muted-foreground">
+                Simpan materi dulu, lalu edit untuk menambah audio.
+              </p>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="material-audio-title">Judul audio</Label>
+                  <Input
+                    id="material-audio-title"
+                    value={audioTitle}
+                    onChange={(event) => setAudioTitle(event.target.value)}
+                    maxLength={160}
+                    placeholder="Contoh: Penjelasan Hukum Newton"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="material-audio-file">Berkas audio (maksimal 10 MB)</Label>
+                  <Input
+                    ref={audioFileInput}
+                    id="material-audio-file"
+                    type="file"
+                    accept="audio/mpeg,audio/mp4,audio/x-m4a,audio/ogg,.mp3,.mp4,.m4a,.ogg"
+                    onChange={(event) => handleAudioFileChange(event.target.files?.[0] ?? null)}
+                  />
+                  {audioFile && (
+                    <p className="text-xs text-muted-foreground">
+                      {audioFile.name} · {(audioFile.size / (1024 * 1024)).toFixed(2)} MB
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="material-audio-transcript">Transkrip (opsional, maksimal 5.000 karakter)</Label>
+                  <Textarea
+                    id="material-audio-transcript"
+                    value={audioTranscript}
+                    onChange={(event) => setAudioTranscript(event.target.value)}
+                    maxLength={5000}
+                    rows={3}
+                    placeholder="Tulis transkrip audio..."
+                  />
+                  <p className="text-right text-[11px] text-muted-foreground">
+                    {Array.from(audioTranscript).length}/5.000
+                  </p>
+                </div>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="gap-2"
+                  onClick={handleUploadMaterialAudio}
+                  disabled={loading || !audioFile || !audioTitle.trim()}
+                >
+                  <Upload className="h-4 w-4" aria-hidden="true" />
+                  {audioUploadProgress !== null ? `Mengunggah ${audioUploadProgress}%` : 'Unggah audio'}
+                </Button>
+                {audioUploadProgress !== null && (
+                  <progress
+                    className="block h-2 w-full accent-primary"
+                    max={100}
+                    value={audioUploadProgress}
+                    aria-label={`Progres unggah audio ${audioUploadProgress}%`}
+                  />
+                )}
+                {audioSuccess && <p className="text-xs text-emerald-700">{audioSuccess}</p>}
+
+                <div className="space-y-2 border-t pt-3">
+                  <h4 className="text-xs font-semibold">Audio tersimpan ({materialAudios.length})</h4>
+                  {materialAudios.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Belum ada audio pada materi ini.</p>
+                  ) : (
+                    <ol className="space-y-2">
+                      {materialAudios.map((audio, index) => (
+                        <li key={audio.id} className="flex items-start gap-3 rounded-md border p-3">
+                          <Music2 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                          <div className="min-w-0 flex-1">
+                            <p className="break-words text-sm font-medium">{audio.title}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {audio.duration_seconds
+                                ? `${Math.floor(audio.duration_seconds / 60)}:${String(Math.floor(audio.duration_seconds % 60)).padStart(2, '0')}`
+                                : 'Durasi tidak tersedia'}
+                              {audio.transcript ? ' · Transkrip tersedia' : ''}
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-1">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`Pindahkan ${audio.title} ke atas`}
+                              title="Pindahkan ke atas"
+                              disabled={loading || index === 0}
+                              onClick={() => handleMoveMaterialAudio(audio.id, index - 1)}
+                            >
+                              <ArrowUp className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`Pindahkan ${audio.title} ke bawah`}
+                              title="Pindahkan ke bawah"
+                              disabled={loading || index === materialAudios.length - 1}
+                              onClick={() => handleMoveMaterialAudio(audio.id, index + 1)}
+                            >
+                              <ArrowDown className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`Hapus ${audio.title}`}
+                              title="Hapus audio"
+                              disabled={loading}
+                              onClick={() => handleDeleteMaterialAudio(audio)}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </div>
+              </>
+            )}
+          </section>
+
           <div className="space-y-2">
             <Label>Isi Materi Pembelajaran (Rich Text)</Label>
             <TipTapEditor
@@ -1036,7 +1363,7 @@ export function ModulesManager({
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={() => setIsMaterialModalOpen(false)}>
+            <Button type="button" variant="outline" onClick={closeMaterialEditor}>
               Batal
             </Button>
             <Button type="submit" disabled={loading}>
