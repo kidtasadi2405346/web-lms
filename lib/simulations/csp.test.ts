@@ -2,11 +2,22 @@ import { describe, it, expect } from 'vitest'
 import {
   mergeContentSecurityPolicy,
   getFrameSrcSources,
+  getMediaSrcSources,
   ALLOWED_SIMULATION_DOMAINS,
 } from './csp'
 import nextConfig from '../../next.config'
 
 describe('Content Security Policy (CSP) Frame-Src Whitelist', () => {
+  it('membatasi media-src ke self dan origin Supabase Storage', () => {
+    expect(getMediaSrcSources('https://project.supabase.co/storage/v1')).toEqual([
+      "'self'",
+      'https://project.supabase.co',
+    ])
+
+    const csp = mergeContentSecurityPolicy()
+    expect(csp).toContain("media-src 'self'")
+  })
+
   it('menghasilkan daftar frame-src yang mencakup seluruh domain whitelist simulasi', () => {
     const sources = getFrameSrcSources()
     expect(sources).toContain("'self'")
@@ -55,6 +66,12 @@ describe('Content Security Policy (CSP) Frame-Src Whitelist', () => {
     const tokens = frameSrcPart!.trim().split(/\s+/)
     const selfCount = tokens.filter((t) => t === "'self'").length
     expect(selfCount).toBe(1)
+  })
+
+  it('mempertahankan media-src yang ada dan menambahkan sumber media Supabase', () => {
+    const merged = mergeContentSecurityPolicy("media-src 'self'; img-src 'self'")
+    expect(merged).toContain("media-src 'self'")
+    expect(merged).toContain('img-src \'self\'')
   })
 
   it('memastikan konfigurasi next.config.ts menyematkan CSP yang berisi domain whitelist', async () => {
