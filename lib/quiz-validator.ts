@@ -10,6 +10,9 @@ export const quizSchema = z
     title: z.string().min(1, 'Judul kuis wajib diisi'),
     description: z.string().nullable().optional(),
     passing_score: z.number().min(0).max(100, 'Nilai kelulusan harus antara 0 dan 100'),
+    feedback_mode: z.enum(['none', 'after_submit', 'per_question']).default('none'),
+    review_at: z.string().datetime({ offset: true }).nullable().optional(),
+    sound_effects: z.boolean().default(false),
     open_at: z.string().datetime({ offset: true }).nullable().optional(),
     due_at: z.string().datetime({ offset: true }).nullable().optional(),
     close_at: z.string().datetime({ offset: true }).nullable().optional(),
@@ -28,6 +31,30 @@ export const quizSchema = z
     {
       message: 'Kuis bab wajib terhubung ke modul/materi, sedangkan kuis penilaian wajib memiliki kelas dan mata pelajaran.',
       path: ['type'],
+    }
+  )
+  .refine(
+    (data) => {
+      if (data.type === 'assessment' && data.feedback_mode === 'per_question') {
+        return false
+      }
+      return true
+    },
+    {
+      message: 'Kuis penilaian tidak dapat menggunakan mode "langsung per soal".',
+      path: ['feedback_mode'],
+    }
+  )
+  .refine(
+    (data) => {
+      if (data.open_at && data.review_at) {
+        return new Date(data.review_at) >= new Date(data.open_at)
+      }
+      return true
+    },
+    {
+      message: 'Pembahasan dibuka pada (review_at) tidak boleh sebelum waktu buka kuis (open_at).',
+      path: ['review_at'],
     }
   )
   .refine(

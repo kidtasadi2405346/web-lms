@@ -29,12 +29,15 @@ export async function createQuizAction(formData: FormData): Promise<ActionState>
     const title = (formData.get('title') as string)?.trim()
     const description = (formData.get('description') as string)?.trim() || null
     const passingScore = parseInt((formData.get('passing_score') as string) || '70', 10)
+    const feedbackMode = ((formData.get('feedback_mode') as string)?.trim() || (type === 'chapter' ? 'per_question' : 'none')) as 'none' | 'after_submit' | 'per_question'
     const shuffleQuestions = formData.get('shuffle_questions') === 'true'
     const shuffleOptions = formData.get('shuffle_options') === 'true'
+    const soundEffects = formData.get('sound_effects') === 'true'
 
     const openAtRaw = (formData.get('open_at') as string)?.trim()
     const dueAtRaw = (formData.get('due_at') as string)?.trim()
     const closeAtRaw = (formData.get('close_at') as string)?.trim()
+    const reviewAtRaw = (formData.get('review_at') as string)?.trim()
     const allowLate = formData.get('allow_late') === 'true'
     const maxAttemptsRaw = (formData.get('max_attempts') as string)?.trim()
     const maxAttempts = maxAttemptsRaw ? parseInt(maxAttemptsRaw, 10) : null
@@ -42,6 +45,7 @@ export async function createQuizAction(formData: FormData): Promise<ActionState>
     const openAt = openAtRaw ? new Date(openAtRaw).toISOString() : null
     const dueAt = dueAtRaw ? new Date(dueAtRaw).toISOString() : null
     const closeAt = closeAtRaw ? new Date(closeAtRaw).toISOString() : null
+    const reviewAt = reviewAtRaw ? new Date(reviewAtRaw).toISOString() : null
 
     const parsed = quizSchema.safeParse({
       type,
@@ -52,6 +56,9 @@ export async function createQuizAction(formData: FormData): Promise<ActionState>
       title,
       description,
       passing_score: isNaN(passingScore) ? 70 : passingScore,
+      feedback_mode: feedbackMode,
+      review_at: reviewAt,
+      sound_effects: soundEffects,
       open_at: openAt,
       due_at: dueAt,
       close_at: closeAt,
@@ -84,12 +91,15 @@ export async function updateQuizAction(quizId: string, classId: string, formData
     const title = (formData.get('title') as string)?.trim()
     const description = (formData.get('description') as string)?.trim() || null
     const passingScore = parseInt((formData.get('passing_score') as string) || '70', 10)
+    const feedbackMode = ((formData.get('feedback_mode') as string)?.trim() || 'none') as 'none' | 'after_submit' | 'per_question'
     const shuffleQuestions = formData.get('shuffle_questions') === 'true'
     const shuffleOptions = formData.get('shuffle_options') === 'true'
+    const soundEffects = formData.get('sound_effects') === 'true'
 
     const openAtRaw = (formData.get('open_at') as string)?.trim()
     const dueAtRaw = (formData.get('due_at') as string)?.trim()
     const closeAtRaw = (formData.get('close_at') as string)?.trim()
+    const reviewAtRaw = (formData.get('review_at') as string)?.trim()
     const allowLate = formData.get('allow_late') === 'true'
     const maxAttemptsRaw = (formData.get('max_attempts') as string)?.trim()
     const maxAttempts = maxAttemptsRaw ? parseInt(maxAttemptsRaw, 10) : null
@@ -102,6 +112,7 @@ export async function updateQuizAction(quizId: string, classId: string, formData
     const openAt = openAtRaw ? new Date(openAtRaw).toISOString() : null
     const dueAt = dueAtRaw ? new Date(dueAtRaw).toISOString() : null
     const closeAt = closeAtRaw ? new Date(closeAtRaw).toISOString() : null
+    const reviewAt = reviewAtRaw ? new Date(reviewAtRaw).toISOString() : null
 
     if (openAt && dueAt && new Date(openAt) >= new Date(dueAt)) {
       return { error: 'Waktu buka kuis harus lebih awal dari tenggat waktu (due date).' }
@@ -117,6 +128,9 @@ export async function updateQuizAction(quizId: string, classId: string, formData
       title,
       description,
       passing_score: passingScore,
+      feedback_mode: feedbackMode,
+      review_at: reviewAt,
+      sound_effects: soundEffects,
       shuffle_questions: shuffleQuestions,
       shuffle_options: shuffleOptions,
       open_at: openAt,
@@ -172,6 +186,7 @@ export async function createQuestionAction(formData: FormData): Promise<ActionSt
     const optC = (formData.get('option_c') as string)?.trim()
     const optD = (formData.get('option_d') as string)?.trim()
     const correctOption = (formData.get('correct_option') as string)?.trim().toUpperCase()
+    const explanation = (formData.get('explanation') as string)?.trim() || null
 
     if (!quizId) return { error: 'Kuis wajib ditentukan.' }
     if (!questionText) return { error: 'Teks pertanyaan wajib diisi.' }
@@ -208,6 +223,7 @@ export async function createQuestionAction(formData: FormData): Promise<ActionSt
     const { error: keyError } = await supabase.from('question_keys').insert({
       question_id: newQuestion.id,
       correct_option: correctOption,
+      explanation,
     })
 
     if (keyError) {
@@ -234,6 +250,7 @@ export async function updateQuestionAction(questionId: string, classId: string, 
     const optC = (formData.get('option_c') as string)?.trim()
     const optD = (formData.get('option_d') as string)?.trim()
     const correctOption = (formData.get('correct_option') as string)?.trim().toUpperCase()
+    const explanation = (formData.get('explanation') as string)?.trim() || null
 
     if (!questionText) return { error: 'Teks pertanyaan wajib diisi.' }
     if (!optA || !optB || !optC || !optD) {
@@ -267,6 +284,7 @@ export async function updateQuestionAction(questionId: string, classId: string, 
       .upsert({
         question_id: questionId,
         correct_option: correctOption,
+        explanation,
       })
 
     if (keyError) return { error: keyError.message }

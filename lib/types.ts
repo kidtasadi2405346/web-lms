@@ -87,6 +87,7 @@ export type QuestionItem = {
 }
 
 export type QuizType = 'chapter' | 'assessment'
+export type FeedbackMode = 'none' | 'after_submit' | 'per_question'
 
 export type QuizItem = {
   id: string
@@ -98,6 +99,9 @@ export type QuizItem = {
   title: string
   description?: string | null
   passing_score: number
+  feedback_mode?: FeedbackMode
+  review_at?: string | null
+  sound_effects?: boolean
   open_at?: string | null
   due_at?: string | null
   close_at?: string | null
@@ -122,7 +126,10 @@ export type QuizAttemptItem = {
   score: number
   passed: boolean
   answers: Record<string, string>
-  attempted_at: string
+  status?: 'in_progress' | 'submitted'
+  started_at?: string
+  finished_at?: string | null
+  attempted_at?: string | null
   is_late?: boolean
 }
 
