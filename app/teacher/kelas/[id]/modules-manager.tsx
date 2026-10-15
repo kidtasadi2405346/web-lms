@@ -95,6 +95,7 @@ type QuizData = {
   max_attempts?: number | null
   order_index: number
   created_at?: string
+  sound_effects?: boolean
   shuffle_questions?: boolean
   shuffle_options?: boolean
   questions?: QuestionData[]
@@ -198,6 +199,7 @@ export function ModulesManager({
   const [quizCloseAt, setQuizCloseAt] = useState('')
   const [quizAllowLate, setQuizAllowLate] = useState(false)
   const [quizMaxAttempts, setQuizMaxAttempts] = useState('1')
+  const [quizSoundEffects, setQuizSoundEffects] = useState(false)
   const [shuffleQuestions, setShuffleQuestions] = useState(false)
   const [shuffleOptions, setShuffleOptions] = useState(false)
 
@@ -546,6 +548,7 @@ export function ModulesManager({
     setQuizCloseAt('')
     setQuizAllowLate(false)
     setQuizMaxAttempts('1')
+    setQuizSoundEffects(false)
     setShuffleQuestions(false)
     setShuffleOptions(false)
     setError(null)
@@ -564,6 +567,7 @@ export function ModulesManager({
     setQuizCloseAt(formatDateTimeForInput(qz.close_at))
     setQuizAllowLate(qz.allow_late ?? false)
     setQuizMaxAttempts(qz.max_attempts ? String(qz.max_attempts) : '1')
+    setQuizSoundEffects(qz.sound_effects ?? false)
     setShuffleQuestions(qz.shuffle_questions ?? false)
     setShuffleOptions(qz.shuffle_options ?? false)
     setError(null)
@@ -604,6 +608,7 @@ export function ModulesManager({
     formData.append('title', quizTitle)
     formData.append('description', quizDesc)
     formData.append('passing_score', passingScore)
+    formData.append('sound_effects', String(quizSoundEffects))
     formData.append('shuffle_questions', String(shuffleQuestions))
     formData.append('shuffle_options', String(shuffleOptions))
 
@@ -1634,6 +1639,23 @@ export function ModulesManager({
                   Posisi pilihan A, B, C, D diacak di layar siswa tanpa memengaruhi kunci jawaban dan akurasi penilaian.
                 </p>
               </div>
+            </label>
+          </div>
+
+          <div className="rounded-lg border p-3">
+            <label className="flex cursor-pointer select-none items-start gap-2.5 text-xs">
+              <input
+                type="checkbox"
+                checked={quizSoundEffects}
+                onChange={(event) => setQuizSoundEffects(event.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-input text-primary focus:ring-primary"
+              />
+              <span>
+                <span className="font-medium text-foreground">Efek suara kuis</span>
+                <span className="mt-0.5 block leading-relaxed text-muted-foreground">
+                  Default mati. Jika aktif, siswa mendengar efek suara saat hasil kuis ditampilkan.
+                </span>
+              </span>
             </label>
           </div>
 
