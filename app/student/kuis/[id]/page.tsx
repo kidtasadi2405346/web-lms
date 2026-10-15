@@ -36,6 +36,7 @@ export default async function StudentQuizPage({ params }: PageProps) {
       close_at,
       allow_late,
       max_attempts,
+      sound_effects,
       shuffle_questions,
       shuffle_options,
       subjects:subject_id (name),
@@ -216,6 +217,7 @@ export default async function StudentQuizPage({ params }: PageProps) {
         module_title: moduleData?.title ?? (isAssessment ? 'Ujian / Penilaian' : 'Modul'),
         subject_name: subjectName,
         class_name: className,
+        sound_effects: Boolean(quiz.sound_effects),
         shuffle_questions: Boolean(quiz.shuffle_questions),
         shuffle_options: Boolean(quiz.shuffle_options),
       }}

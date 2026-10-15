@@ -17,10 +17,13 @@ import {
   Shuffle,
   Sparkles,
   Trophy,
+  Volume2,
+  VolumeX,
   XCircle,
 } from 'lucide-react'
 import { submitQuizAction } from '@/lib/actions/quiz'
 import type { QuizSubmissionResult } from '@/lib/types'
+import { playQuizSound, prepareQuizAudio } from '@/lib/sounds'
 
 type QuestionItem = {
   id: string
@@ -39,6 +42,7 @@ interface QuizTakerProps {
     module_title: string
     subject_name: string
     class_name: string
+    sound_effects?: boolean
     shuffle_questions?: boolean
     shuffle_options?: boolean
   }
@@ -90,6 +94,15 @@ export function QuizTaker({ quiz, questions, previousAttempt, nextModuleId }: Qu
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<QuizSubmissionResult | null>(null)
   const [isResultModalOpen, setIsResultModalOpen] = useState(false)
+  const [soundMuted, setSoundMuted] = useState(false)
+
+  useEffect(() => {
+    try {
+      setSoundMuted(window.localStorage.getItem('mini-lms-quiz-sound-muted') === 'true')
+    } catch {
+      setSoundMuted(false)
+    }
+  }, [])
 
   // Shuffle pada client-side saat komponen dimuat untuk menghindari hydration mismatch
   useEffect(() => {
@@ -120,6 +133,7 @@ export function QuizTaker({ quiz, questions, previousAttempt, nextModuleId }: Qu
       return
     }
 
+    prepareQuizAudio(quiz.sound_effects === true && !soundMuted)
     setSubmitting(true)
     setError(null)
 
@@ -133,6 +147,19 @@ export function QuizTaker({ quiz, questions, previousAttempt, nextModuleId }: Qu
 
     setResult(res.result)
     setIsResultModalOpen(true)
+    playQuizSound(res.result.passed ? 'passed' : 'not-passed', quiz.sound_effects === true && !soundMuted)
+  }
+
+  function toggleSound() {
+    setSoundMuted((muted) => {
+      const nextMuted = !muted
+      try {
+        window.localStorage.setItem('mini-lms-quiz-sound-muted', String(nextMuted))
+      } catch {
+        // Audio preference remains available for this page even if storage is blocked.
+      }
+      return nextMuted
+    })
   }
 
   function handleRetryRemedial() {
@@ -189,6 +216,19 @@ export function QuizTaker({ quiz, questions, previousAttempt, nextModuleId }: Qu
               <Badge className="font-mono text-xs">
                 Passing Score: {quiz.passing_score}%
               </Badge>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                aria-pressed={!soundMuted}
+                aria-label={soundMuted ? 'Aktifkan suara kuis' : 'Bisukan suara kuis'}
+                title={soundMuted ? 'Aktifkan suara kuis' : 'Bisukan suara kuis'}
+                onClick={toggleSound}
+              >
+                {soundMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                Suara {soundMuted ? 'mati' : 'aktif'}
+              </Button>
               <div className="flex flex-wrap items-center gap-1">
                 {quiz.shuffle_questions && (
                   <Badge variant="outline" className="text-[10px] gap-1 text-emerald-600 dark:text-emerald-400 border-emerald-500/30">
