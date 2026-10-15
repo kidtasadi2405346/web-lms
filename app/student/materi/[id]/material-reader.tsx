@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import { toggleMaterialCompletionAction } from '@/lib/actions/student'
 import { SimulationEmbed } from '@/components/simulation/simulation-embed'
+import { AudioPlayer, type MaterialAudioTrack } from '@/components/media/audio-player'
 import type { SimulationItem } from '@/lib/types'
 
 export type SiblingMaterial = {
@@ -46,6 +47,7 @@ interface MaterialReaderProps {
     class_name: string
   }
   simulations?: SimulationItem[]
+  audios?: MaterialAudioTrack[]
   isCompletedInitially: boolean
   siblingMaterials: SiblingMaterial[]
   prevMaterialId: string | null
@@ -56,6 +58,7 @@ interface MaterialReaderProps {
 export function MaterialReader({
   material,
   simulations,
+  audios = [],
   isCompletedInitially,
   siblingMaterials,
   prevMaterialId,
@@ -131,6 +134,8 @@ export function MaterialReader({
               <VideoEmbed url={material.video_url} title={material.title} />
             </div>
           )}
+
+          {audios.length > 0 && <AudioPlayer materialId={material.id} audios={audios} />}
 
           {/* Konten Uraian Teks HTML (Disanitasi) */}
           {material.content && (

@@ -41,6 +41,14 @@ export default async function StudentMaterialPage({ params }: PageProps) {
         order_index,
         created_at
       ),
+      material_audios (
+        id,
+        title,
+        file_path,
+        duration_seconds,
+        transcript,
+        order_index
+      ),
       modules:module_id (
         id,
         title,
@@ -164,6 +172,7 @@ export default async function StudentMaterialPage({ params }: PageProps) {
         class_name: moduleData?.classes?.name ?? 'Kelas',
       }}
       simulations={activeSimulations}
+      audios={material.material_audios ?? []}
       isCompletedInitially={isCurrentCompleted}
       siblingMaterials={siblingMaterials}
       prevMaterialId={prevMaterial?.id ?? null}
