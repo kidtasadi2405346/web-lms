@@ -31,6 +31,7 @@ import { submitQuizAction } from "@/lib/actions/quiz";
 import type { QuizSubmissionResult } from "@/lib/types";
 import { playQuizSound, prepareQuizAudio } from "@/lib/sounds";
 import { PerQuestionQuizRunner } from "@/components/student/per-question-quiz-runner";
+import { useProfilePreferences } from "@/components/layout/profile-preferences";
 
 type QuestionItem = {
   id: string;
@@ -103,6 +104,7 @@ export function QuizTaker({
   nextModuleId,
 }: QuizTakerProps) {
   const router = useRouter();
+  const { audioEnabled } = useProfilePreferences();
   const [displayQuestions, setDisplayQuestions] =
     useState<QuestionItem[]>(questions);
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -172,7 +174,7 @@ export function QuizTaker({
       return;
     }
 
-    prepareQuizAudio(quiz.sound_effects === true && !soundMuted);
+    prepareQuizAudio(quiz.sound_effects === true && audioEnabled && !soundMuted);
     setSubmitting(true);
     setError(null);
 
@@ -188,7 +190,7 @@ export function QuizTaker({
     setIsResultModalOpen(true);
     playQuizSound(
       res.result.passed ? "passed" : "not-passed",
-      quiz.sound_effects === true && !soundMuted,
+      quiz.sound_effects === true && audioEnabled && !soundMuted,
     );
   }
 
@@ -268,21 +270,30 @@ export function QuizTaker({
                 variant="outline"
                 size="sm"
                 className="gap-2"
-                aria-pressed={!soundMuted}
+                disabled={!audioEnabled}
+                aria-pressed={audioEnabled && !soundMuted}
                 aria-label={
-                  soundMuted ? "Aktifkan suara kuis" : "Bisukan suara kuis"
+                  !audioEnabled
+                    ? "Efek audio dinonaktifkan dari pengaturan profil"
+                    : soundMuted
+                      ? "Aktifkan suara kuis"
+                      : "Bisukan suara kuis"
                 }
                 title={
-                  soundMuted ? "Aktifkan suara kuis" : "Bisukan suara kuis"
+                  !audioEnabled
+                    ? "Efek audio dinonaktifkan dari pengaturan profil"
+                    : soundMuted
+                      ? "Aktifkan suara kuis"
+                      : "Bisukan suara kuis"
                 }
                 onClick={toggleSound}
               >
-                {soundMuted ? (
+                {soundMuted || !audioEnabled ? (
                   <VolumeX className="h-4 w-4" />
                 ) : (
                   <Volume2 className="h-4 w-4" />
                 )}
-                Suara {soundMuted ? "mati" : "aktif"}
+                Suara {soundMuted || !audioEnabled ? "mati" : "aktif"}
               </Button>
               <div className="flex flex-wrap items-center gap-1">
                 {quiz.shuffle_questions && (

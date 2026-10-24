@@ -417,7 +417,7 @@ export function TipTapEditor({
   const currentFontSize = editor.getAttributes('textStyle').fontSize || '16px'
 
   return (
-    <div className="flex flex-col rounded-lg border bg-background shadow-sm focus-within:ring-1 focus-within:ring-ring">
+    <div className="flex flex-col rounded-xl border border-border/80 bg-background shadow-xs focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 transition-all overflow-hidden">
       {/* Banner Notifikasi Pulihkan Draf Lokal */}
       {hasDraft && (
         <div className="flex items-center justify-between gap-2 border-b bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
@@ -430,7 +430,7 @@ export function TipTapEditor({
               type="button"
               size="sm"
               variant="default"
-              className="h-6 text-[11px] px-2 bg-amber-600 hover:bg-amber-700 text-white"
+              className="h-6 text-[11px] px-2 bg-amber-600 hover:bg-amber-700 text-white rounded-md"
               onClick={handleRestoreDraft}
             >
               Pulihkan Draf
@@ -439,7 +439,7 @@ export function TipTapEditor({
               type="button"
               size="sm"
               variant="ghost"
-              className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
+              className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground rounded-md"
               onClick={handleDiscardDraft}
             >
               Abaikan
@@ -464,7 +464,7 @@ export function TipTapEditor({
       />
 
       {/* Sticky Toolbar Responsif */}
-      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-1 border-b bg-muted/40 backdrop-blur-sm p-1.5 overflow-x-auto rounded-t-lg">
+      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-1 border-b border-border/70 bg-muted/40 backdrop-blur-md p-2 overflow-x-auto">
         {/* Pilihan Font Family */}
         <div className="relative inline-flex items-center">
           <select

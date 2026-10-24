@@ -44,7 +44,7 @@ function SidebarNavInner({ role, studentSubjects }: SidebarNavProps) {
   const totalStudentModules = (studentSubjects ?? []).reduce((acc, s) => acc + s.moduleCount, 0)
 
   return (
-    <nav className="flex flex-col gap-1 p-3" aria-label="Menu utama">
+    <nav className="flex flex-col gap-1.5 p-3" aria-label="Menu utama">
       {NAV[role].map(({ href, label, icon: Icon }) => {
         const isMainActive =
           href === '/admin'
@@ -52,26 +52,36 @@ function SidebarNavInner({ role, studentSubjects }: SidebarNavProps) {
             : href === '/student'
             ? pathname === '/student' || pathname.startsWith('/student/materi') || pathname.startsWith('/student/kuis')
             : pathname === href || pathname.startsWith(`${href}/`)
+        // Jangan aktifkan item nav di halaman pengaturan (mis. /teacher/settings)
+        const isActive = isMainActive && !pathname.endsWith('/settings')
 
         return (
           <div key={href} className="space-y-1">
             <Link
               href={href}
-              aria-current={isMainActive && !currentSubject ? 'page' : undefined}
+              aria-current={isActive && !currentSubject ? 'page' : undefined}
               className={cn(
-                'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                isMainActive && !currentSubject
-                  ? 'bg-accent text-accent-foreground font-semibold'
-                  : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
+                'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150',
+                isActive && !currentSubject
+                  ? 'bg-primary/10 text-primary font-semibold shadow-xs'
+                  : 'text-muted-foreground hover:bg-accent/70 hover:text-foreground',
               )}
             >
-              <Icon className="h-4 w-4 shrink-0" />
+              <Icon
+                className={cn(
+                  'h-4 w-4 shrink-0 transition-transform group-hover:scale-105',
+                  isActive && !currentSubject ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground',
+                )}
+              />
               <span className="truncate">{label}</span>
+              {isActive && !currentSubject && (
+                <span className="absolute right-2.5 h-1.5 w-1.5 rounded-full bg-primary" />
+              )}
             </Link>
 
             {/* Sub-menu Mata Pelajaran HANYA di Bawah Pelajaran Saya */}
             {role === 'student' && href === '/student' && studentSubjects && studentSubjects.length > 0 && (
-              <div className="ml-3 border-l-2 border-border/60 pl-2.5 my-1.5 space-y-0.5">
+              <div className="ml-3 border-l-2 border-border/80 pl-2.5 my-1.5 space-y-0.5">
                 <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
                   Mata Pelajaran
                 </div>
@@ -79,7 +89,7 @@ function SidebarNavInner({ role, studentSubjects }: SidebarNavProps) {
                 <Link
                   href="/student"
                   className={cn(
-                    'group flex items-center justify-between rounded-md px-2 py-1.5 text-xs font-medium transition-colors',
+                    'group flex items-center justify-between rounded-md px-2 py-1.5 text-xs font-medium transition-all',
                     pathname === '/student' && !currentSubject
                       ? 'bg-primary/15 text-primary font-semibold'
                       : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
@@ -88,10 +98,10 @@ function SidebarNavInner({ role, studentSubjects }: SidebarNavProps) {
                   <span className="truncate">Semua Pelajaran</span>
                   <span
                     className={cn(
-                      'text-[10px] px-1.5 py-0.5 rounded font-mono shrink-0',
+                      'text-[10px] px-1.5 py-0.5 rounded font-mono shrink-0 transition-colors',
                       pathname === '/student' && !currentSubject
-                        ? 'bg-primary/20 text-primary font-semibold'
-                        : 'text-muted-foreground/80 bg-muted/60',
+                        ? 'bg-primary/25 text-primary font-semibold'
+                        : 'text-muted-foreground/80 bg-muted/80',
                     )}
                   >
                     {totalStudentModules}
@@ -106,7 +116,7 @@ function SidebarNavInner({ role, studentSubjects }: SidebarNavProps) {
                       href={`/student?subject=${encodeURIComponent(sub.name)}`}
                       title={sub.name}
                       className={cn(
-                        'group flex items-center justify-between rounded-md px-2 py-1.5 text-xs font-medium transition-colors',
+                        'group flex items-center justify-between rounded-md px-2 py-1.5 text-xs font-medium transition-all',
                         isSubActive
                           ? 'bg-primary/15 text-primary font-semibold'
                           : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
@@ -115,10 +125,10 @@ function SidebarNavInner({ role, studentSubjects }: SidebarNavProps) {
                       <span className="truncate mr-1.5">{sub.name}</span>
                       <span
                         className={cn(
-                          'text-[10px] px-1.5 py-0.5 rounded font-mono shrink-0',
+                          'text-[10px] px-1.5 py-0.5 rounded font-mono shrink-0 transition-colors',
                           isSubActive
-                            ? 'bg-primary/20 text-primary font-semibold'
-                            : 'text-muted-foreground/80 bg-muted/60',
+                            ? 'bg-primary/25 text-primary font-semibold'
+                            : 'text-muted-foreground/80 bg-muted/80',
                         )}
                       >
                         {sub.moduleCount}

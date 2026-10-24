@@ -34,6 +34,7 @@ describe("Content Security Policy (CSP) Frame-Src Whitelist", () => {
       expect(csp).toContain(`https://*.${domain}`);
     }
     expect(csp).toContain("default-src 'self'");
+    expect(csp).toContain("img-src 'self' data: blob: https:");
     expect(csp).toContain("base-uri 'self'");
   });
 
@@ -75,7 +76,23 @@ describe("Content Security Policy (CSP) Frame-Src Whitelist", () => {
       "media-src 'self'; img-src 'self'",
     );
     expect(merged).toContain("media-src 'self'");
-    expect(merged).toContain("img-src 'self'");
+    expect(merged).toContain("img-src 'self' data: blob: https:");
+  });
+
+  it("menambahkan img-src yang mengizinkan URL blob tanpa menghapus sumber gambar yang ada", () => {
+    const merged = mergeContentSecurityPolicy(
+      "default-src 'none'; img-src https://images.example.com",
+    );
+
+    expect(merged).toContain(
+      "img-src https://images.example.com 'self' data: blob: https:",
+    );
+  });
+
+  it("menambahkan img-src jika CSP yang sudah ada belum memilikinya", () => {
+    const merged = mergeContentSecurityPolicy("default-src 'none'");
+
+    expect(merged).toContain("img-src 'self' data: blob: https:");
   });
 
   it("memastikan konfigurasi next.config.ts menyematkan CSP yang berisi domain whitelist", async () => {

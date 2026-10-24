@@ -2,7 +2,13 @@ import * as React from 'react'
 import { cn } from '@/lib/utils'
 
 const Card = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn('rounded-lg border bg-card text-card-foreground', className)} {...props} />
+  <div
+    className={cn(
+      'rounded-xl border border-border/70 bg-card text-card-foreground shadow-sm transition-all duration-200',
+      className,
+    )}
+    {...props}
+  />
 )
 const CardHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div className={cn('flex flex-col space-y-1.5 p-6', className)} {...props} />

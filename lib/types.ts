@@ -5,6 +5,10 @@ export type Profile = {
   name: string;
   role: Role;
   identity_number: string;
+  username?: string | null;
+  avatar_url?: string | null;
+  theme?: "light" | "dark" | "system";
+  audio_enabled?: boolean;
   created_at?: string;
 };
 

@@ -102,46 +102,50 @@ export function StudentModulesDashboard({ className, referralCode, modules }: St
   return (
     <div className="space-y-6">
       {/* Kartu Ringkasan Progres Siswa */}
-      <Card className="relative overflow-hidden border bg-gradient-to-br from-card via-card to-primary/5 shadow-sm">
-        <CardHeader className="pb-3">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
+      <Card className="relative overflow-hidden border border-border/80 bg-gradient-to-br from-card via-card to-primary/10 shadow-sm">
+        <div className="absolute -right-12 -top-12 h-44 w-44 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
+        <CardHeader className="pb-3 relative z-10">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1.5">
               <div className="flex items-center gap-2">
-                <Badge variant="outline" className="font-mono text-xs">
+                <Badge variant="outline" className="font-mono text-xs border-primary/30 text-primary bg-primary/5">
                   {referralCode}
                 </Badge>
-                <Badge variant="secondary" className="text-xs">
+                <Badge variant="secondary" className="text-xs font-semibold">
                   Kelas {className}
                 </Badge>
               </div>
-              <CardTitle className="mt-2 text-xl font-bold tracking-tight">Progres Belajar Anda</CardTitle>
-              <CardDescription className="text-sm">
-                Pelajari materi dan lulus kuis untuk otomatis membuka bab materi berikutnya.
+              <CardTitle className="text-2xl font-bold tracking-tight">Progres Belajar Anda</CardTitle>
+              <CardDescription className="text-sm text-muted-foreground/90 max-w-xl">
+                Pelajari materi dan selesaikan evaluasi bab secara berurutan untuk membuka modul lanjutan.
               </CardDescription>
             </div>
-            <div className="flex items-center gap-3 self-start sm:self-center">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                <Trophy className="h-7 w-7" />
+            <div className="flex items-center gap-4 self-start sm:self-center rounded-2xl border border-primary/20 bg-background/60 p-3 backdrop-blur-xs shadow-xs">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+                <Trophy className="h-6 w-6" />
               </div>
               <div>
-                <p className="text-3xl font-extrabold text-foreground">{overallPercentage}%</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-2xl font-extrabold text-foreground tracking-tight">{overallPercentage}%</p>
+                <p className="text-[11px] font-medium text-muted-foreground">
                   {completedMaterials}/{totalMaterials} Materi • {passedQuizzes}/{totalQuizzes} Kuis
                 </p>
               </div>
             </div>
           </div>
         </CardHeader>
-        <CardContent className="pt-0">
-          <div className="mt-2 space-y-1.5">
-            <div className="h-3 w-full overflow-hidden rounded-full bg-muted">
+        <CardContent className="pt-1 relative z-10">
+          <div className="space-y-2">
+            <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted/80 p-0.5">
               <div
-                className="h-full rounded-full bg-primary transition-all duration-500 ease-out"
+                className="h-full rounded-full bg-gradient-to-r from-primary to-teal-400 transition-all duration-700 ease-out"
                 style={{ width: `${overallPercentage}%` }}
               />
             </div>
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>{grandCompleted} aktivitas tuntas</span>
+            <div className="flex justify-between text-xs text-muted-foreground font-medium">
+              <span className="flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                {grandCompleted} aktivitas tuntas
+              </span>
               <span>{grandTotal - grandCompleted} aktivitas tersisa</span>
             </div>
           </div>
@@ -282,43 +286,43 @@ export function StudentModulesDashboard({ className, referralCode, modules }: St
                             <Link
                               key={mat.id}
                               href={`/student/materi/${mat.id}`}
-                              className="group flex flex-col gap-3 rounded-lg border bg-card p-3.5 transition-all hover:border-primary/50 hover:bg-accent/40 hover:shadow-sm sm:flex-row sm:items-center sm:justify-between"
+                              className="group flex flex-col gap-3 rounded-xl border border-border/70 bg-card p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/50 hover:bg-accent/30 hover:shadow-md sm:flex-row sm:items-center sm:justify-between"
                             >
-                              <div className="flex items-start gap-3">
+                              <div className="flex items-start gap-3.5">
                                 <div
-                                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-semibold ${
+                                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-xs font-bold transition-transform duration-200 group-hover:scale-105 ${
                                     isDone
-                                      ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                                      : 'bg-primary/10 text-primary'
+                                      ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 shadow-2xs'
+                                      : 'bg-primary/10 text-primary shadow-2xs'
                                   }`}
                                 >
                                   {isDone ? (
-                                    <CheckCircle2 className="h-4 w-4" />
+                                    <CheckCircle2 className="h-5 w-5" />
                                   ) : mat.has_video ? (
-                                    <PlayCircle className="h-4 w-4" />
+                                    <PlayCircle className="h-5 w-5" />
                                   ) : (
                                     matIdx + 1
                                   )}
                                 </div>
                                 <div>
                                   <div className="flex items-center gap-2">
-                                    <p className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">
+                                    <p className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
                                       {mat.title}
                                     </p>
                                     {isDone && (
-                                      <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px]">
+                                      <Badge variant="secondary" className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 text-[10px] font-semibold">
                                         Selesai ✓
                                       </Badge>
                                     )}
                                   </div>
-                                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                  <div className="mt-1.5 flex flex-wrap items-center gap-2.5 text-xs text-muted-foreground">
                                     {mat.has_simulation && (
-                                      <span className="flex items-center gap-1 text-primary font-medium">
-                                        <Cpu className="h-3 w-3" /> Simulasi
+                                      <span className="flex items-center gap-1 text-primary font-medium bg-primary/10 px-2 py-0.5 rounded-md">
+                                        <Cpu className="h-3 w-3" /> Simulasi Interaktif
                                       </span>
                                     )}
                                     {mat.has_video && (
-                                      <span className="flex items-center gap-1 text-primary">
+                                      <span className="flex items-center gap-1 text-primary/90 font-medium">
                                         <Video className="h-3 w-3" /> Video
                                       </span>
                                     )}
@@ -331,11 +335,11 @@ export function StudentModulesDashboard({ className, referralCode, modules }: St
                                 </div>
                               </div>
 
-                              <div className="flex items-center gap-2 self-end sm:self-auto">
-                                <span className="text-xs font-medium text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+                              <div className="flex items-center gap-1.5 self-end sm:self-auto text-primary">
+                                <span className="text-xs font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
                                   Buka Materi
                                 </span>
-                                <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                                <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                               </div>
                             </Link>
                           )

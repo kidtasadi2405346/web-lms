@@ -1,7 +1,7 @@
 -- Tahap 3: Progres Belajar Siswa, Fungsi can_access_material, dan Penguncian RLS Materials
 
 -- 1. Tabel pencatatan materi yang diselesaikan siswa
-create table if public.material_completions is not exists (
+create table if not exists public.material_completions (
   student_id   uuid not null references public.profiles (id) on delete cascade,
   material_id  uuid not null references public.materials (id) on delete cascade,
   completed_at timestamptz not null default now(),

@@ -28,6 +28,7 @@ import {
 } from "@/lib/actions/quiz";
 import { playQuizSound, prepareQuizAudio } from "@/lib/sounds";
 import type { QuizSubmissionResult } from "@/lib/types";
+import { useProfilePreferences } from "@/components/layout/profile-preferences";
 
 type QuestionItem = {
   id: string;
@@ -80,6 +81,7 @@ export function PerQuestionQuizRunner({
   quiz,
   questions,
 }: PerQuestionQuizRunnerProps) {
+  const { audioEnabled } = useProfilePreferences();
   const [displayQuestions, setDisplayQuestions] = useState<QuestionItem[]>([]);
   const [attemptId, setAttemptId] = useState<string | null>(null);
   const [savedAnswers, setSavedAnswers] = useState<Record<string, string>>({});
@@ -153,7 +155,7 @@ export function PerQuestionQuizRunner({
   async function handleAnswer() {
     const question = displayQuestions[questionIndex];
     if (!attemptId || !question || !selectedAnswer || feedback) return;
-    prepareQuizAudio(quiz.sound_effects && !soundMuted);
+    prepareQuizAudio(quiz.sound_effects && audioEnabled && !soundMuted);
     setWorking(true);
     setError(null);
     const response = await answerQuestionAction(
@@ -174,13 +176,13 @@ export function PerQuestionQuizRunner({
     }));
     playQuizSound(
       revealed.is_correct ? "correct" : "incorrect",
-      quiz.sound_effects && !soundMuted,
+      quiz.sound_effects && audioEnabled && !soundMuted,
     );
   }
 
   async function handleFinish() {
     if (!attemptId) return;
-    prepareQuizAudio(quiz.sound_effects && !soundMuted);
+    prepareQuizAudio(quiz.sound_effects && audioEnabled && !soundMuted);
     setWorking(true);
     setError(null);
     const response = await finishQuizAction(quiz.id, attemptId);
@@ -192,7 +194,7 @@ export function PerQuestionQuizRunner({
     setResult(response.result);
     playQuizSound(
       response.result.passed ? "passed" : "not-passed",
-      quiz.sound_effects && !soundMuted,
+      quiz.sound_effects && audioEnabled && !soundMuted,
     );
   }
 
@@ -233,10 +235,18 @@ export function PerQuestionQuizRunner({
             type="button"
             variant="outline"
             size="sm"
-            aria-pressed={!soundMuted}
+            disabled={!audioEnabled}
+            aria-pressed={audioEnabled && !soundMuted}
+            aria-label={
+              !audioEnabled
+                ? "Efek audio dinonaktifkan dari pengaturan profil"
+                : soundMuted
+                  ? "Aktifkan suara kuis"
+                  : "Bisukan suara kuis"
+            }
             onClick={toggleSound}
           >
-            {soundMuted ? "Suara mati" : "Suara aktif"}
+            {soundMuted || !audioEnabled ? "Suara mati" : "Suara aktif"}
           </Button>
         </div>
       </div>

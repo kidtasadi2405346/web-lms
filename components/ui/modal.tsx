@@ -50,19 +50,19 @@ export function Modal({ isOpen, onClose, title, description, children, maxWidth 
       <div
         role="dialog"
         aria-modal="true"
-        className={`relative z-50 w-full ${widthClasses[maxWidth]} max-h-[90vh] overflow-y-auto rounded-xl border bg-background p-6 shadow-xl animate-in fade-in zoom-in-95`}
+        className={`relative z-50 w-full ${widthClasses[maxWidth]} max-h-[90vh] overflow-y-auto custom-scrollbar rounded-xl border bg-background p-6 shadow-xl animate-in fade-in zoom-in-95`}
       >
         <div className="flex items-start justify-between gap-4">
-          <div>
+          <div className="flex-1">
             <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
-            {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
+            {description && <p className="mt-1.5 text-sm text-muted-foreground leading-relaxed">{description}</p>}
           </div>
           <Button
             type="button"
             variant="ghost"
             size="sm"
             onClick={onClose}
-            className="h-8 w-8 rounded-full p-0 text-muted-foreground hover:text-foreground"
+            className="h-8 w-8 shrink-0 rounded-full p-0 text-muted-foreground hover:text-foreground mt-0.5"
           >
             <X className="h-4 w-4" />
             <span className="sr-only">Tutup</span>

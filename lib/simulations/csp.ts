@@ -6,6 +6,8 @@ export const DEFAULT_MEDIA_FRAME_SOURCES = [
   "https://drive.google.com",
 ];
 
+const DEFAULT_IMAGE_SOURCES = ["'self'", "data:", "blob:", "https:"];
+
 /**
  * Menghasilkan directive frame-src yang memuat domain whitelist simulasi ('self', https://domain, https://*.domain)
  * serta media video yang didukung aplikasi.
@@ -46,7 +48,7 @@ export function mergeContentSecurityPolicy(existingCsp: string = ""): string {
       "default-src 'self'",
       "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: https:",
+      `img-src ${DEFAULT_IMAGE_SOURCES.join(" ")}`,
       "font-src 'self' data:",
       "connect-src 'self' https: wss:",
       `frame-src ${frameSources.join(" ")}`,
@@ -63,6 +65,7 @@ export function mergeContentSecurityPolicy(existingCsp: string = ""): string {
 
   let frameSrcFound = false;
   let mediaSrcFound = false;
+  let imgSrcFound = false;
   const updatedDirectives = directives.map((directive) => {
     if (directive.toLowerCase().startsWith("frame-src")) {
       frameSrcFound = true;
@@ -80,9 +83,20 @@ export function mergeContentSecurityPolicy(existingCsp: string = ""): string {
       );
       return `media-src ${mergedTokens.join(" ")}`;
     }
+    if (directive.split(/\s+/, 1)[0]?.toLowerCase() === "img-src") {
+      imgSrcFound = true;
+      const existingTokens = directive.split(/\s+/).slice(1);
+      const mergedTokens = Array.from(
+        new Set([...existingTokens, ...DEFAULT_IMAGE_SOURCES]),
+      );
+      return `img-src ${mergedTokens.join(" ")}`;
+    }
     return directive;
   });
 
+  if (!imgSrcFound) {
+    updatedDirectives.push(`img-src ${DEFAULT_IMAGE_SOURCES.join(" ")}`);
+  }
   if (!frameSrcFound) {
     updatedDirectives.push(`frame-src ${frameSources.join(" ")}`);
   }
